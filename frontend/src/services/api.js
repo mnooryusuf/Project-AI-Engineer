@@ -15,11 +15,21 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// Handle 401 — redirect ke login
+// Endpoint autentikasi WAJAR membalas 401 — itu jawaban "username atau
+// password salah", bukan tanda sesi kedaluwarsa. Tanpa pengecualian ini,
+// salah ketik password ikut memuat ulang halaman: TERBUKTI saat diuji, form
+// ter-reset dan pesan "Username atau password salah." tidak pernah sempat
+// tampil karena React dibongkar sebelum sempat menggambarnya — pengguna
+// tidak diberi tahu apa pun tentang kenapa loginnya gagal.
+const AUTH_PATHS = ['/auth/login', '/auth/register']
+
+// Handle 401 pada sesi yang sudah berjalan — token kedaluwarsa/dicabut.
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const url = error.config?.url || ''
+    const dariEndpointAuth = AUTH_PATHS.some((p) => url.includes(p))
+    if (error.response?.status === 401 && !dariEndpointAuth) {
       localStorage.removeItem('access_token')
       window.location.reload()
     }

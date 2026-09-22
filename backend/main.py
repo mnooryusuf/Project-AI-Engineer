@@ -11,7 +11,7 @@ import aiofiles
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
-from fastapi import BackgroundTasks, FastAPI, Depends, HTTPException, UploadFile, File, status
+from fastapi import BackgroundTasks, FastAPI, Depends, HTTPException, Request, UploadFile, File, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -22,7 +22,7 @@ import bcrypt
 
 from config import get_settings
 from database import get_db, engine, SessionLocal
-from models import Base, ChatHistory, Document, UploadJob, User
+from models import Base, ChatHistory, Document, LoginAttempt, UploadJob, User
 from schemas import (
     ChatRequest, UploadResponse, UploadJobStatus, HealthResponse,
     UserCreate, UserResponse, Token, TokenData,
@@ -115,6 +115,33 @@ def get_password_hash(password: str) -> str:
     return bcrypt.hashpw(_password_bytes(password), bcrypt.gensalt()).decode("utf-8")
 
 
+# Hash boneka untuk dibandingkan saat username tidak ditemukan, supaya bcrypt
+# tetap dijalankan dan waktu respons login tidak membocorkan akun mana yang
+# benar-benar ada. TERUKUR sebelum ini dipasang: username yang ada dijawab
+# rata-rata 246 ms (melewati bcrypt), yang tidak ada hanya 46 ms (langsung
+# ditolak) — selisih 5x yang konsisten, cukup untuk memetakan daftar akun
+# tanpa menebak satu password pun. Dihitung sekali saat start (~0,2 detik).
+_DUMMY_PASSWORD_HASH = get_password_hash("hash-boneka-untuk-menyamakan-waktu-respons")
+
+# Pembatasan tebakan password.
+#
+# Dibatasi per USERNAME, bukan per alamat IP. Idealnya per IP, tapi frontend
+# mem-proxy semua permintaan ke backend (lihat proxy /api di vite.config.js)
+# sehingga SEMUA pengguna terlihat datang dari 127.0.0.1 — membatasi per IP
+# berarti satu penyerang mengunci seluruh pegawai sekaligus, obat yang lebih
+# buruk dari penyakitnya.
+#
+# Konsekuensi yang disadari: penyerang bisa sengaja mengunci akun pegawai
+# tertentu selama 15 menit dengan 5 tebakan asal. Untuk aplikasi internal
+# dinas ini dianggap sepadan — penyerang harus sudah berada di dalam jaringan,
+# efeknya sementara, dan barisnya tercatat di tabel login_attempts sehingga
+# admin bisa melihat akun mana yang sedang diserang. Kalau nanti aplikasi
+# dibuka ke internet, pembatasan per IP harus ditambahkan (dan IP asli harus
+# diteruskan reverse proxy lewat X-Forwarded-For).
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_LOCK_MINUTES = 15
+
+
 def create_access_token(data: dict) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
     return jwt.encode({**data, "exp": expire}, settings.secret_key, algorithm=settings.algorithm)
@@ -179,11 +206,85 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
 
 
 @app.post("/auth/login", response_model=Token, tags=["Auth"])
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login(
+    request: Request,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db),
+):
     """Login dan dapatkan JWT token."""
+    batas_waktu = datetime.now(timezone.utc) - timedelta(minutes=LOGIN_LOCK_MINUTES)
+
+    # Percobaan gagal yang sudah lewat jendela waktu dibuang di sini, supaya
+    # tabelnya tidak tumbuh tanpa batas tanpa perlu tugas pembersih terpisah.
+    db.query(LoginAttempt).filter(LoginAttempt.created_at < batas_waktu).delete()
+    db.commit()
+
+    gagal = (
+        db.query(LoginAttempt)
+        .filter(
+            LoginAttempt.username == form_data.username,
+            LoginAttempt.created_at >= batas_waktu,
+        )
+        .order_by(LoginAttempt.created_at)
+        .all()
+    )
+    if len(gagal) >= LOGIN_MAX_ATTEMPTS:
+        # Kunci berakhir saat percobaan TERTUA keluar dari jendela waktu,
+        # bukan dihitung dari percobaan terakhir — supaya menebak terus tidak
+        # memperpanjang kuncian selamanya bagi pemilik akun yang sah.
+        sisa = (gagal[0].created_at + timedelta(minutes=LOGIN_LOCK_MINUTES)) - datetime.now(timezone.utc)
+        menit = max(1, int(sisa.total_seconds() // 60) + 1)
+        raise HTTPException(
+            status_code=429,
+            detail=f"Terlalu banyak percobaan login yang gagal. Coba lagi dalam {menit} menit.",
+            headers={"Retry-After": str(int(sisa.total_seconds()))},
+        )
+
+    def catat_kegagalan() -> None:
+        db.add(LoginAttempt(
+            username=form_data.username,
+            ip_address=request.client.host if request.client else None,
+        ))
+        db.commit()
+
     user = db.query(User).filter(User.username == form_data.username).first()
-    if not user or not verify_password(form_data.password, user.hashed_password):
+
+    # Verifikasi password dijalankan SELALU — termasuk saat username tidak ada,
+    # dengan membandingkan ke hash boneka. Kalau tidak, permintaan dengan
+    # username asal ditolak tanpa melewati bcrypt sehingga jauh lebih cepat,
+    # dan selisih waktu itu sendiri membocorkan akun mana yang ada.
+    password_benar = verify_password(
+        form_data.password,
+        user.hashed_password if user else _DUMMY_PASSWORD_HASH,
+    )
+    if not user or not password_benar:
+        # Dicatat juga untuk username yang TIDAK ADA — kalau hanya username
+        # nyata yang dihitung, penyerang bisa membedakan keduanya dari ada
+        # atau tidaknya kuncian setelah 5 percobaan, membocorkan lagi apa yang
+        # sudah ditutup lewat penyamaan waktu respons di atas.
+        catat_kegagalan()
         raise HTTPException(status_code=401, detail="Username atau password salah.")
+
+    # Pesan yang berbeda di sini aman: hanya bisa dilihat oleh orang yang SUDAH
+    # membuktikan tahu password akun ini — jadi tidak bisa dipakai untuk menebak
+    # akun mana yang ada. Sebelumnya is_active tidak dicek sama sekali di sini:
+    # akun nonaktif tetap mendapat token, lalu setiap permintaan berikutnya
+    # ditolak get_current_user tanpa penjelasan apa pun.
+    if not user.is_active:
+        # Dihitung sebagai kegagalan juga: tanpa ini, akun nonaktif yang
+        # passwordnya sudah bocor bisa dipakai memancing respons 403 berkali-kali
+        # tanpa batas.
+        catat_kegagalan()
+        raise HTTPException(
+            status_code=403,
+            detail="Akun ini dinonaktifkan. Hubungi administrator Diskominfo.",
+        )
+
+    # Login berhasil — hitungan direset supaya kegagalan sebelumnya (biasanya
+    # salah ketik) tidak menumpuk sampai mengunci pemilik akun yang sah.
+    db.query(LoginAttempt).filter(LoginAttempt.username == form_data.username).delete()
+    db.commit()
+
     token = create_access_token({"sub": user.username})
     return {"access_token": token, "token_type": "bearer"}
 

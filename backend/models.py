@@ -45,6 +45,27 @@ class Document(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class LoginAttempt(Base):
+    """
+    Catatan percobaan login yang GAGAL, untuk membatasi tebakan password
+    beruntun (lihat /auth/login di main.py).
+
+    Disimpan di database, bukan di memori: penghitung di memori akan hilang
+    setiap backend di-restart, sehingga penyerang cukup menunggu restart
+    berikutnya untuk mengulang dari nol. Selain itu barisnya berguna sebagai
+    jejak audit — admin bisa melihat akun mana yang sedang ditebak-tebak.
+    """
+    __tablename__ = "login_attempts"
+
+    id = Column(BigInteger, primary_key=True, index=True)
+    username = Column(String(100), nullable=False, index=True)
+    # Saat ini hampir selalu 127.0.0.1 karena frontend mem-proxy permintaan
+    # (lihat proxy /api di vite.config.js). Tetap dicatat supaya berguna kalau
+    # nanti aplikasi dipasang di belakang nginx yang meneruskan IP asli.
+    ip_address = Column(String(45), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
 class UploadJob(Base):
     """
     Status pemrosesan satu berkas yang diunggah.
