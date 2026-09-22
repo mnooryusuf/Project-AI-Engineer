@@ -27,7 +27,7 @@ function CodeBlock({ children, ...props }) {
       <button
         onClick={handleCopy}
         className="absolute top-2 right-2 text-[11px] font-medium px-2 py-1 rounded-md opacity-0 group-hover/code:opacity-100 transition-opacity duration-150"
-        style={{ background: 'rgba(255,255,255,0.08)', color: 'var(--text-muted)' }}
+        style={{ background: 'var(--overlay-3)', color: 'var(--text-muted)' }}
       >
         {copied ? '✓ Disalin' : 'Salin'}
       </button>
@@ -47,7 +47,7 @@ function CopyButton({ text }) {
   return (
     <button
       onClick={handleCopy}
-      className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded-md opacity-0 group-hover/msg:opacity-100 transition-opacity duration-150 hover:bg-white/5"
+      className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded-md opacity-0 group-hover/msg:opacity-100 transition-opacity duration-150 hover:bg-[var(--overlay-2)]"
       style={{ color: 'var(--text-muted)' }}
       title="Salin jawaban"
     >
@@ -107,7 +107,10 @@ export default function MessageBubble({ role, message, toolUsed, sources, isStre
           </span>
         )}
 
-        <div className="prose prose-invert prose-sm max-w-none text-slate-200 font-medium text-[14.5px] leading-relaxed prose-p:leading-relaxed prose-pre:bg-black/30 prose-pre:border prose-pre:border-white/10 prose-pre:rounded-xl">
+        <div
+          className="prose prose-invert prose-sm max-w-none font-medium text-[14.5px] leading-relaxed prose-p:leading-relaxed prose-pre:bg-[var(--code-bg)] prose-pre:border prose-pre:border-[var(--code-border)] prose-pre:rounded-xl"
+          style={{ color: 'var(--text-primary)' }}
+        >
           <ReactMarkdown components={{ pre: CodeBlock }}>{message}</ReactMarkdown>
           {isStreaming && (
             <span

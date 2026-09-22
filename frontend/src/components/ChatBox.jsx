@@ -15,6 +15,7 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
 
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
+  const abortControllerRef = useRef(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -74,6 +75,8 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
     // Begitu token pertama datang, bubble jawaban muncul dan terisi
     // progresif — bukan menunggu jawaban penuh baru ditampilkan sekaligus.
     let assistantMsgId = null
+    const controller = new AbortController()
+    abortControllerRef.current = controller
 
     try {
       await sendMessageStream(sessionId, text, imageFilename, {
@@ -106,12 +109,29 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
           // "terakhir aktif" ikut ter-update tanpa harus refresh halaman.
           onMessageSent?.()
         },
-      })
+      }, controller.signal)
     } catch (err) {
-      notify(err.message || 'Gagal menghubungi server.', true)
+      if (err.name === 'AbortError') {
+        // Dihentikan lewat tombol Stop — bukan kegagalan, jangan tampilkan
+        // sebagai error. Backend tetap menyimpan jawaban parsial yang
+        // sempat ter-generate (diuji: finally block di /chat tetap jalan
+        // walau koneksi diputus paksa), jadi cukup tandai bubble ini
+        // berhenti streaming dan biarkan teks yang sudah ada tetap tampil.
+        setMessages((prev) =>
+          prev.map((m) => (m.id === assistantMsgId ? { ...m, streaming: false } : m))
+        )
+        onMessageSent?.()
+      } else {
+        notify(err.message || 'Gagal menghubungi server.', true)
+      }
     } finally {
       setLoading(false)
+      abortControllerRef.current = null
     }
+  }
+
+  const handleStop = () => {
+    abortControllerRef.current?.abort()
   }
 
   const handleKeyDown = (e) => {
@@ -143,14 +163,14 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
       {/* ── Header ──────────────────────────────── */}
       <div
         className="flex items-center justify-between px-4 sm:px-6 py-4 flex-shrink-0 relative z-20 backdrop-blur-md"
-        style={{ borderBottom: '1px solid var(--glass-border)', background: 'rgba(4,9,20,0.6)' }}
+        style={{ borderBottom: '1px solid var(--glass-border)', background: 'var(--surface-translucent)' }}
       >
         <div className="flex items-center gap-3">
           {/* Tombol sidebar — hanya tampil di layar sempit (sidebar sudah
               selalu terbuka di desktop) */}
           <button
             onClick={onToggleSidebar}
-            className="md:hidden w-9 h-9 rounded-xl flex items-center justify-center hover:bg-white/5 transition-colors"
+            className="md:hidden w-9 h-9 rounded-xl flex items-center justify-center hover:bg-[var(--overlay-2)] transition-colors"
             style={{ color: 'var(--text-muted)' }}
             title="Buka daftar percakapan"
           >
@@ -180,7 +200,7 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
           </div>
           <button
             onClick={onLogout}
-            className="text-xs font-semibold px-4 py-2 rounded-xl transition-all duration-300 hover:bg-white/5 hover:text-white"
+            className="text-xs font-semibold px-4 py-2 rounded-xl transition-all duration-300 hover:bg-[var(--overlay-2)] hover:text-[var(--text-primary)]"
             style={{ color: 'var(--text-muted)', border: '1px solid var(--glass-border)' }}
           >
             Keluar
@@ -199,7 +219,7 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
               🤖
             </div>
             <div>
-              <p className="font-bold text-xl text-slate-100 mb-2 tracking-tight">Siap Membantu Anda</p>
+              <p className="font-bold text-xl mb-2 tracking-tight" style={{ color: 'var(--text-primary)' }}>Siap Membantu Anda</p>
               <p className="text-sm max-w-md mx-auto" style={{ color: 'var(--text-muted)' }}>
                 Ajukan pertanyaan, minta ringkasan, atau upload dokumen/gambar untuk dianalisis oleh AI.
               </p>
@@ -215,7 +235,7 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
                   onClick={() => setInput(s.slice(3))}
                   className="text-xs font-medium px-4 py-2.5 rounded-full transition-colors duration-200 hover:text-white"
                   style={{
-                    background: 'rgba(255,255,255,0.03)',
+                    background: 'var(--overlay-1)',
                     border: '1px solid var(--glass-border)',
                     color: 'var(--text-muted)',
                   }}
@@ -322,23 +342,21 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
               placeholder="Tulis pertanyaan..."
               rows={1}
               disabled={loading}
-              className="w-full bg-transparent resize-none outline-none text-sm font-medium text-slate-100 placeholder-slate-500 leading-relaxed py-3 pr-2 scroll-smooth"
+              className="w-full bg-transparent resize-none outline-none text-sm font-medium text-[var(--text-primary)] placeholder-[var(--text-muted)] leading-relaxed py-3 pr-2 scroll-smooth"
               style={{ maxHeight: '120px' }}
             />
           </div>
 
           <button
             id="send-btn"
-            onClick={handleSend}
-            disabled={!input.trim() || loading}
+            onClick={loading ? handleStop : handleSend}
+            disabled={!loading && !input.trim()}
             className="w-12 h-12 mb-0.5 mr-0.5 rounded-[1.5rem] flex items-center justify-center transition-all duration-200 hover:brightness-110 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
             style={{ background: 'linear-gradient(135deg, var(--accent-blue), var(--accent-purple))' }}
+            title={loading ? 'Hentikan jawaban' : 'Kirim'}
           >
             {loading ? (
-              <svg className="animate-spin w-5 h-5 text-white" fill="none" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10" stroke="white" strokeOpacity="0.3" strokeWidth="3"/>
-                <path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" strokeLinecap="round"/>
-              </svg>
+              <span className="w-3.5 h-3.5 rounded-[3px] bg-white" />
             ) : (
               <svg className="w-5 h-5 text-white transform translate-x-px" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />

@@ -7,6 +7,7 @@
 @tailwind utilities;
 /* stylelint-enable */
 
+/* Dark (default — ini tema asli aplikasi, dipertahankan sebagai basis). */
 :root {
   --bg-primary: #040914;      /* Deeper dark blue */
   --bg-secondary: #0a1128;
@@ -19,6 +20,46 @@
   --border: rgba(255, 255, 255, 0.08);
   --glass: rgba(255, 255, 255, 0.03);
   --glass-border: rgba(255, 255, 255, 0.05);
+
+  /* Token overlay netral — dipakai lewat kelas Tailwind arbitrary value
+     (mis. `bg-[var(--overlay-2)]`) di komponen, supaya hover/active state
+     ikut berubah otomatis saat tema berganti, bukan hardcode
+     rgba(255,255,255,...) yang cuma benar untuk latar gelap. */
+  --overlay-1: rgba(255, 255, 255, 0.03);  /* subtle bg (kartu, chip) */
+  --overlay-2: rgba(255, 255, 255, 0.06);  /* hover */
+  --overlay-3: rgba(255, 255, 255, 0.1);   /* active/selected, border kuat */
+  --scrim: rgba(0, 0, 0, 0.6);             /* backdrop modal */
+  --code-bg: rgba(0, 0, 0, 0.3);           /* latar blok kode */
+  --code-border: rgba(255, 255, 255, 0.1);
+  /* Bar header/input yang backdrop-blur di atas konten yang scroll —
+     versi tembus pandang dari --bg-primary, bukan --glass (--glass dibuat
+     untuk kartu, bukan bar penuh-lebar). */
+  --surface-translucent: rgba(4, 9, 20, 0.6);
+}
+
+/* Light — token yang sama, nilai berbeda. Diaktifkan lewat atribut
+   data-theme di <html> (lihat main.jsx), bukan prefers-color-scheme —
+   ini toggle manual yang dipilih user, bukan mengikuti preferensi OS. */
+[data-theme="light"] {
+  --bg-primary: #f7f8fa;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --accent-blue: #2563eb;
+  --accent-purple: #9333ea;
+  --accent-cyan: #0891b2;
+  --text-primary: #0f172a;
+  --text-muted: #64748b;
+  --border: rgba(15, 23, 42, 0.08);
+  --glass: rgba(255, 255, 255, 0.75);
+  --glass-border: rgba(15, 23, 42, 0.08);
+
+  --overlay-1: rgba(15, 23, 42, 0.03);
+  --overlay-2: rgba(15, 23, 42, 0.06);
+  --overlay-3: rgba(15, 23, 42, 0.1);
+  --scrim: rgba(15, 23, 42, 0.4);
+  --code-bg: rgba(15, 23, 42, 0.05);
+  --code-border: rgba(15, 23, 42, 0.1);
+  --surface-translucent: rgba(247, 248, 250, 0.75);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -31,14 +72,35 @@ html, body, #root {
   overflow: hidden;
   /* Smooth scrolling for general app */
   scroll-behavior: smooth;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Jawaban AI selalu pakai class Tailwind Typography "prose-invert" apa adanya
+   (lihat MessageBubble.jsx) — dibuat untuk teks terang di atas latar gelap.
+   Daripada bikin komponennya tahu soal tema (prop-drilling tambahan cuma
+   demi ganti nama class), override variabel CSS internal si plugin di sini
+   lewat cascade [data-theme="light"] — .prose-invert tetap dipakai apa
+   adanya, warnanya saja yang disesuaikan. */
+[data-theme="light"] .prose-invert {
+  --tw-prose-body: var(--text-primary);
+  --tw-prose-headings: var(--text-primary);
+  --tw-prose-bold: var(--text-primary);
+  --tw-prose-bullets: var(--text-muted);
+  --tw-prose-counters: var(--text-muted);
+  --tw-prose-code: var(--accent-blue);
+  --tw-prose-links: var(--accent-blue);
+  --tw-prose-quotes: var(--text-primary);
+  --tw-prose-quote-borders: var(--border);
+  --tw-prose-hr: var(--border);
+  --tw-prose-captions: var(--text-muted);
 }
 
 /* Scrollbar styling */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { 
-  background: rgba(255,255,255,0.1); 
-  border-radius: 8px; 
+::-webkit-scrollbar-thumb {
+  background: var(--overlay-3);
+  border-radius: 8px;
   transition: background 0.3s;
 }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }

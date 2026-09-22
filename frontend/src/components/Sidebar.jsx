@@ -1,7 +1,5 @@
 // src/components/Sidebar.jsx — Daftar riwayat percakapan, gaya restrained
 // (bukan neon) seperti sidebar ChatGPT/Gemini.
-import { useEffect, useState } from 'react'
-
 function formatRelativeTime(iso) {
   const date = new Date(iso + (iso.endsWith('Z') ? '' : 'Z'))
   const diffMs = Date.now() - date.getTime()
@@ -24,13 +22,16 @@ export default function Sidebar({
   isOpen,
   onClose,
   onOpenDocuments,
+  theme,
+  onToggleTheme,
 }) {
   return (
     <>
       {/* Overlay mobile — tutup sidebar saat area luar ditekan */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-30 md:hidden"
+          className="fixed inset-0 z-30 md:hidden"
+          style={{ background: 'var(--scrim)' }}
           onClick={onClose}
         />
       )}
@@ -48,7 +49,7 @@ export default function Sidebar({
           <button
             id="new-chat-btn"
             onClick={onNewChat}
-            className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 hover:bg-white/[0.06]"
+            className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 hover:bg-[var(--overlay-2)]"
             style={{ border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}
           >
             <span className="text-base leading-none">+</span>
@@ -71,7 +72,7 @@ export default function Sidebar({
                       onClick={() => onSelectSession(s.session_id)}
                       className="w-full text-left px-3 py-2.5 rounded-xl text-sm truncate transition-colors duration-150"
                       style={{
-                        background: active ? 'rgba(255,255,255,0.07)' : 'transparent',
+                        background: active ? 'var(--overlay-2)' : 'transparent',
                         color: active ? 'var(--text-primary)' : 'var(--text-muted)',
                       }}
                       title={s.title}
@@ -88,14 +89,22 @@ export default function Sidebar({
           )}
         </div>
 
-        <div className="p-3" style={{ borderTop: '1px solid var(--glass-border)' }}>
+        <div className="p-3 flex flex-col gap-1" style={{ borderTop: '1px solid var(--glass-border)' }}>
           <button
             id="open-documents-btn"
             onClick={onOpenDocuments}
-            className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 hover:bg-white/[0.06]"
+            className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 hover:bg-[var(--overlay-2)]"
             style={{ color: 'var(--text-muted)' }}
           >
             📄 Dokumen
+          </button>
+          <button
+            id="toggle-theme-btn"
+            onClick={onToggleTheme}
+            className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 hover:bg-[var(--overlay-2)]"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            {theme === 'dark' ? '☀️ Mode Terang' : '🌙 Mode Gelap'}
           </button>
         </div>
       </aside>

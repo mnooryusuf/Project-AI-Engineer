@@ -6,6 +6,18 @@
     <title>Agentic RAG — Local AI Assistant</title>
     <meta name="description" content="AI Assistant lokal berbasis Agentic RAG dengan kemampuan membaca dokumen, gambar, dan database." />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <script>
+      // Terapkan tema tersimpan SEBELUM React/CSS sempat menggambar apa pun —
+      // kalau ini ditaruh di main.jsx saja, ada jeda singkat di mana halaman
+      // sempat tergambar dengan tema default (dark) dulu baru "melompat" ke
+      // tema tersimpan (light), terlihat seperti kedipan/flash.
+      try {
+        var t = localStorage.getItem('theme');
+        if (t === 'light' || t === 'dark') {
+          document.documentElement.setAttribute('data-theme', t);
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

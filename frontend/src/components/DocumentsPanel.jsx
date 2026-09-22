@@ -42,7 +42,7 @@ export default function DocumentsPanel({ isOpen, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="absolute inset-0" style={{ background: 'var(--scrim)' }} onClick={onClose} />
 
       <div
         className="relative w-full max-w-lg max-h-[80vh] flex flex-col rounded-3xl glass slide-up-fade overflow-hidden"
@@ -57,7 +57,7 @@ export default function DocumentsPanel({ isOpen, onClose }) {
           </h2>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-white/5 transition-colors"
+            className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-[var(--overlay-2)] transition-colors"
             style={{ color: 'var(--text-muted)' }}
           >
             ✕
@@ -88,7 +88,7 @@ export default function DocumentsPanel({ isOpen, onClose }) {
               {documents.map((doc) => (
                 <li
                   key={doc.filename}
-                  className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.03] transition-colors"
+                  className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl hover:bg-[var(--overlay-1)] transition-colors"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }} title={doc.filename}>
@@ -111,7 +111,7 @@ export default function DocumentsPanel({ isOpen, onClose }) {
                       </button>
                       <button
                         onClick={() => setConfirmingFilename(null)}
-                        className="text-xs font-semibold px-2.5 py-1.5 rounded-lg hover:bg-white/5"
+                        className="text-xs font-semibold px-2.5 py-1.5 rounded-lg hover:bg-[var(--overlay-2)]"
                         style={{ color: 'var(--text-muted)' }}
                       >
                         Batal

@@ -171,6 +171,39 @@ Testing Matrix (dari implementation_plan.md):
    Diuji end-to-end lewat DOM sungguhan: upload → muncul di panel → klik
    hapus → konfirmasi → hilang dari daftar.
 
+7. **Tombol stop generating** — `AbortController` di `api.js`/`ChatBox.jsx`,
+   tombol kirim berubah jadi kotak stop selama streaming. Backend TIDAK
+   perlu diubah — sudah diverifikasi lewat simulasi disconnect paksa
+   (httpx) bahwa `finally` block di `/chat` tetap jalan & menyimpan
+   jawaban parsial meski koneksi diputus.
+
+   **Dibuktikan mid-stream di DOM sungguhan** (bukan cuma di level
+   jaringan): teks 34 karakter saat diklik stop → sempat jadi 44 karakter
+   (token yang sudah di jalur) → **identik tak berubah 2 detik kemudian**
+   — generasi benar-benar berhenti, bukan cuma disembunyikan sementara
+   backend diam-diam lanjut generate.
+
+8. **Light mode toggle** — bukan sekadar balik warna. Token CSS diperluas
+   dari 9 jadi 15 variabel (`--overlay-1/2/3`, `--scrim`, `--code-bg`,
+   `--code-border`, `--surface-translucent`) supaya SEMUA overlay
+   `rgba(255,255,255,...)` yang tadinya hardcoded untuk latar gelap ikut
+   berganti otomatis, bukan cuma `--bg-primary`/`--text-primary`. Diaudit
+   & diperbaiki di 5 komponen (10+ titik warna hardcoded). Untuk teks
+   markdown jawaban AI (`prose-invert` dari Tailwind Typography), dipakai
+   trik CSS cascade `[data-theme="light"] .prose-invert { --tw-prose-*: ... }`
+   alih-alih prop-drilling tema ke komponen — override variabel internal
+   plugin-nya, bukan ganti className.
+
+   Toggle di footer sidebar, tersimpan di localStorage, diterapkan lewat
+   inline script di `index.html` (bukan cuma di React) supaya tidak ada
+   kedipan tema salah sesaat sebelum React sempat render.
+
+   **Diuji visual di kedua mode** (bukan cuma dicek kompilasi): login,
+   chat dengan jawaban, panel dokumen — semua discreenshot di dark & light,
+   teks tetap kontras & terbaca di keduanya. **Persistensi diuji nyata**:
+   toggle ke light → reload halaman (bukan browser baru) → tema tetap
+   light → toggle balik ke dark → berhasil kembali gelap.
+
 ## 🔮 Post-MVP (opsional, belum disepakati — dari implementation_plan.md)
 Tidak dikerjakan kecuali diminta secara eksplisit:
 - Multi-Agent Architecture (Supervisor + specialized agents)

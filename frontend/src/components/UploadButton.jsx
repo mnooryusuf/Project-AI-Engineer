@@ -58,14 +58,14 @@ export default function UploadButton({ onUploadSuccess, onError }) {
         title="Upload dokumen atau gambar (PDF, TXT, PNG, JPG)"
         className="cursor-pointer flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95"
         style={{
-          background: uploading ? 'rgba(139,92,246,0.3)' : 'rgba(255,255,255,0.07)',
-          border: '1px solid rgba(255,255,255,0.12)',
+          background: uploading ? 'rgba(139,92,246,0.3)' : 'var(--overlay-2)',
+          border: '1px solid var(--glass-border)',
         }}
       >
         {uploading ? (
           <div className="relative w-5 h-5">
             <svg className="animate-spin w-5 h-5" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.2)" strokeWidth="2"/>
+              <circle cx="12" cy="12" r="10" stroke="var(--overlay-3)" strokeWidth="2"/>
               <path d="M12 2a10 10 0 0 1 10 10" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round"/>
             </svg>
             <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold text-purple-300">

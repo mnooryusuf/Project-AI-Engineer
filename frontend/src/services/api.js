@@ -53,7 +53,7 @@ export const register = async (username, email, password) => {
 //   onToken(text)   -> setiap potongan token jawaban
 //   onDone()        -> sekali, setelah stream selesai normal
 // Melempar Error kalau request gagal total (network/HTTP non-2xx).
-export const sendMessageStream = async (sessionId, message, imageFilename, callbacks = {}) => {
+export const sendMessageStream = async (sessionId, message, imageFilename, callbacks = {}, signal) => {
   const { onMeta, onToken, onDone } = callbacks
   const token = localStorage.getItem('access_token')
 
@@ -64,6 +64,7 @@ export const sendMessageStream = async (sessionId, message, imageFilename, callb
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify({ session_id: sessionId, message, image_filename: imageFilename }),
+    signal,
   })
 
   if (!response.ok) {

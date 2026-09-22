@@ -71,7 +71,7 @@ function LoginPage({ onLogin }) {
                 onClick={() => { setMode(m); setError('') }}
                 className="flex-1 py-2.5 text-sm font-semibold transition-all duration-300 capitalize rounded-xl"
                 style={{
-                  background: mode === m ? 'rgba(255,255,255,0.1)' : 'transparent',
+                  background: mode === m ? 'var(--overlay-3)' : 'transparent',
                   color: mode === m ? '#fff' : 'var(--text-muted)',
                   boxShadow: mode === m ? '0 4px 12px rgba(0,0,0,0.1)' : 'none'
                 }}
@@ -95,7 +95,7 @@ function LoginPage({ onLogin }) {
                 style={{
                   border: '1px solid var(--glass-border)',
                   color: 'var(--text-primary)',
-                  backgroundColor: 'rgba(255,255,255,0.03)'
+                  backgroundColor: 'var(--overlay-1)'
                 }}
                 placeholder="masukkan username"
               />
@@ -115,7 +115,7 @@ function LoginPage({ onLogin }) {
                   style={{
                     border: '1px solid var(--glass-border)',
                     color: 'var(--text-primary)',
-                    backgroundColor: 'rgba(255,255,255,0.03)'
+                    backgroundColor: 'var(--overlay-1)'
                   }}
                   placeholder="email@example.com"
                 />
@@ -135,7 +135,7 @@ function LoginPage({ onLogin }) {
                 style={{
                   border: '1px solid var(--glass-border)',
                   color: 'var(--text-primary)',
-                  backgroundColor: 'rgba(255,255,255,0.03)'
+                  backgroundColor: 'var(--overlay-1)'
                 }}
                 placeholder="••••••••"
               />
@@ -175,6 +175,18 @@ export default function App() {
   const [sessionId, setSessionId] = useState(() => uuidv4())
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [documentsOpen, setDocumentsOpen] = useState(false)
+  // Default 'dark' — tema asli aplikasi. index.html sudah menerapkan nilai
+  // tersimpan ke <html> lebih dulu (hindari flash tema salah saat load);
+  // state di sini cuma menyusul supaya React tahu nilainya untuk re-render
+  // (mis. label tombol toggle, className prose-invert vs bukan).
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark')
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem('theme', theme)
+  }, [theme])
+
+  const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
 
   useEffect(() => {
     const token = localStorage.getItem('access_token')
@@ -242,6 +254,8 @@ export default function App() {
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onOpenDocuments={() => { setDocumentsOpen(true); setSidebarOpen(false) }}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
       <div className="flex-1 flex flex-col min-w-0">
         <ChatBox
