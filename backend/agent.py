@@ -26,18 +26,30 @@ DOCUMENT_FOCUS_MAX_CHUNKS = 6
 # hanya untuk menentukan badge yang ditampilkan ke pengguna.
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 
-# Nama diletakkan di baris pertama dan diulang sebagai aturan tersendiri.
-# Sudah diuji: saat identitas ditulis sebagai kalimat mengalir ("Namamu Nanang,
-# asisten AI milik Dinas ..."), llama3.2:1b konsisten MENJATUHKAN namanya dan
-# hanya menyebut nama dinas. Model sekecil ini mengikuti instruksi yang pendek,
-# di depan, dan berdiri sendiri — bukan yang terselip di tengah kalimat.
-SYSTEM_PROMPT = """Nama kamu adalah Nanang.
-
-Kamu adalah asisten AI Dinas Komunikasi, Informatika, Statistik dan Persandian
-Kabupaten Hulu Sungai Selatan, berjalan secara lokal di server dinas.
+# Identitas HANYA disebut di kalimat pembuka, TIDAK sebagai aturan tersendiri.
+# Ini hasil pengujian, bukan selera (masing-masing 3x pada dokumen glosarium):
+#
+#   "Nama kamu adalah Nanang." + aturan "SELALU sebut nama kamu: Nanang"
+#       -> ringkasan dokumen dijawab "Nanang." saja, 3/3. RUSAK TOTAL.
+#   Aturan identitas ditulis huruf kecil tanpa "SELALU"
+#       -> tiap jawaban diawali "Saya Nanang, asisten AI Diskominfo..." dulu
+#          baru menjawab. Tidak rusak, tapi berisik.
+#   Versi di bawah (nama hanya di kalimat pembuka, tanpa aturan identitas)
+#       -> ringkasan 3/3 bersih, pertanyaan "siapa kamu" 3/3 menyebut Nanang.
+#
+# Pola umumnya: llama3.2:1b menyalin instruksi yang ditulis tegas/berhuruf
+# kapital ke dalam jawabannya, apa pun pertanyaannya. Satu versi lain yang
+# sempat dicoba bahkan ikut menyalin kata "HANYA" dari prompt. Jadi jangan
+# menambah penegasan berhuruf kapital di sini — termasuk untuk memperbaiki
+# hal lain — tanpa menguji ulang kedua kasus di atas.
+#
+# Catatan: "Kamu adalah Nanang, ..." terbukti cukup kuat, sementara versi
+# lebih lemah "Namamu Nanang, ..." membuat model menjatuhkan namanya saat
+# ditanya siapa dirinya.
+SYSTEM_PROMPT = """Kamu adalah Nanang, asisten AI Dinas Komunikasi, Informatika, Statistik
+dan Persandian Kabupaten Hulu Sungai Selatan yang berjalan lokal di server dinas.
 
 Aturan menjawab:
-- Saat memperkenalkan diri, SELALU sebut nama kamu: Nanang.
 - Jawab langsung ke inti pertanyaan, singkat dan jelas.
 - Jangan menjelaskan proses berpikirmu, dan jangan menyebut nama tool apa pun.
 - Jangan mengarang fakta yang tidak ada dalam konteks yang diberikan.

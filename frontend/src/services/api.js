@@ -153,6 +153,24 @@ export const getUploadJob = async (jobId) => {
   return res.data
 }
 
+// Jeda antar pengecekan status. Cukup rapat supaya berkas kecil (.txt selesai
+// ~2 detik) tidak terasa tertahan, tapi tidak membanjiri server selama OCR
+// yang bisa berjalan beberapa menit.
+const POLL_INTERVAL_MS = 1000
+
+// Pantau satu pekerjaan sampai selesai. Sengaja tanpa batas percobaan: OCR
+// PDF 10 halaman bisa menyentuh ~5,5 menit, dan menyerah di tengah jalan
+// justru membuat pengguna mengira unggahannya gagal padahal server masih
+// mengerjakannya. `signal` dipakai untuk berhenti saat komponen dilepas.
+export const waitForUploadJob = async (jobId, { signal } = {}) => {
+  for (;;) {
+    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS))
+    if (signal?.aborted) return null
+    const job = await getUploadJob(jobId)
+    if (job.status !== 'processing') return job
+  }
+}
+
 // ── Documents (Knowledge Base) ─────────────────────────
 export const getDocuments = async () => {
   const res = await api.get('/documents')

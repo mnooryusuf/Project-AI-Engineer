@@ -1,12 +1,7 @@
 // src/components/UploadButton.jsx
 import { useRef, useState } from 'react'
 import { Paperclip } from 'lucide-react'
-import { uploadFile, getUploadJob } from '../services/api'
-
-// Jeda antar pengecekan status. Cukup rapat supaya berkas kecil (.txt selesai
-// ~1 detik) tidak terasa tertahan, tapi tidak membanjiri server selama OCR
-// yang bisa berjalan beberapa menit.
-const POLL_INTERVAL_MS = 1000
+import { uploadFile } from '../services/api'
 
 const ALLOWED = [
   'application/pdf', 'text/plain', 'image/png', 'image/jpeg', 'image/webp',
@@ -22,13 +17,15 @@ const ALLOWED_EXT = '.pdf, .txt, .docx, .xlsx, .png, .jpg, .jpeg, .webp'
 // (ekstensi + magic bytes) jadi ini tidak melonggarkan keamanan.
 const ALLOWED_EXT_LIST = ALLOWED_EXT.split(',').map((e) => e.trim())
 
-export default function UploadButton({ onUploadSuccess, onError }) {
+// `processing` datang dari ChatBox, yang memantau pekerjaan sampai selesai —
+// pemantauan tidak ditaruh di sini karena harus tetap berjalan (dan bisa
+// dilanjutkan setelah halaman dimuat ulang) terlepas dari tombol ini.
+export default function UploadButton({ onJobStarted, onError, processing }) {
   const inputRef = useRef(null)
   const [uploading, setUploading] = useState(false)
-  // null selama transfer berkas, "memproses" selama server mengekstrak/OCR —
-  // dibedakan karena keduanya berbeda jauh lamanya (detik vs menit) dan label
-  // "Mengunggah..." selama dua menit terlihat seperti macet.
-  const [phase, setPhase] = useState(null)
+  // Spinner tetap berputar selama server masih memproses, walau transfer
+  // berkasnya sendiri sudah selesai sejak tadi.
+  const busy = uploading || processing
 
   const handleFile = async (file) => {
     if (!file) return
@@ -49,26 +46,15 @@ export default function UploadButton({ onUploadSuccess, onError }) {
 
     setUploading(true)
     try {
-      // Unggahan selesai cepat; pemrosesan (ekstraksi/OCR/embedding) berjalan
-      // di server dan dipantau lewat job_id sampai statusnya bukan
-      // "processing". OCR bisa memakan menit, jadi tidak ada batas percobaan
-      // di sini — pengguna bisa membatalkan dengan menutup halaman, dan
-      // server tetap menyelesaikan pekerjaannya.
+      // Transfer berkas selesai cepat; ekstraksi/OCR/embedding berjalan di
+      // server. job_id diserahkan ke ChatBox yang memantaunya sampai selesai.
       const { job_id } = await uploadFile(file)
-      let job
-      do {
-        await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS))
-        job = await getUploadJob(job_id)
-        setPhase(job.status === 'processing' ? 'memproses' : null)
-      } while (job.status === 'processing')
-
-      onUploadSuccess?.({ ...job, previewUrl, fileSize: file.size })
+      onJobStarted?.({ jobId: job_id, filename: file.name, previewUrl, fileSize: file.size })
     } catch (err) {
       if (previewUrl) URL.revokeObjectURL(previewUrl)
       onError?.(err.response?.data?.detail || 'Upload gagal.')
     } finally {
       setUploading(false)
-      setPhase(null)
       if (inputRef.current) inputRef.current.value = ''
     }
   }
@@ -95,14 +81,14 @@ export default function UploadButton({ onUploadSuccess, onError }) {
         onDragOver={(e) => e.preventDefault()}
         title="Upload dokumen atau gambar (PDF, TXT, DOCX, XLSX, PNG, JPG)"
         className={`cursor-pointer flex items-center justify-center rounded-xl transition-all duration-200 flex-shrink-0 ${
-          uploading ? 'px-3 h-10 gap-2' : 'w-10 h-10 hover:scale-105 active:scale-95'
+          busy ? 'px-3 h-10 gap-2' : 'w-10 h-10 hover:scale-105 active:scale-95'
         }`}
         style={{
-          background: uploading ? 'rgba(139,92,246,0.3)' : 'var(--overlay-2)',
+          background: busy ? 'rgba(139,92,246,0.3)' : 'var(--overlay-2)',
           border: '1px solid var(--glass-border)',
         }}
       >
-        {uploading ? (
+        {busy ? (
           <>
             {/* Spinner tanpa angka — persentase transfer byte selesai
                 dalam hitungan milidetik di localhost (diukur langsung:
@@ -118,7 +104,7 @@ export default function UploadButton({ onUploadSuccess, onError }) {
               <path d="M12 2a10 10 0 0 1 10 10" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round"/>
             </svg>
             <span className="text-xs font-medium whitespace-nowrap" style={{ color: '#c4b5fd' }}>
-              {phase === 'memproses' ? 'Memproses...' : 'Mengunggah...'}
+              {processing ? 'Memproses...' : 'Mengunggah...'}
             </span>
           </>
         ) : (

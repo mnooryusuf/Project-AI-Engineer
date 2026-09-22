@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
 import UploadButton from './UploadButton'
-import { sendMessageStream, getChatHistory } from '../services/api'
+import { sendMessageStream, getChatHistory, waitForUploadJob } from '../services/api'
 import { Bot, FileText, Image as ImageIcon, Database, X, CheckCircle, AlertTriangle } from 'lucide-react'
 import Mascot from './Mascot'
 
@@ -12,6 +12,13 @@ const DEFAULT_PROMPT = {
   image: 'Apa isi teks pada gambar ini?',
   document: 'Ringkas isi dokumen ini.',
 }
+
+// Kunci localStorage tempat job_id unggahan yang belum selesai disimpan,
+// supaya pemrosesan yang masih berjalan bisa dilanjutkan setelah halaman
+// ditutup atau dimuat ulang.
+const PENDING_UPLOAD_KEY = 'nanang_pending_upload'
+
+const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp']
 
 const formatBytes = (bytes) => {
   if (!bytes && bytes !== 0) return ''
@@ -31,6 +38,9 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
   // { type: 'image' | 'document', filename, stored_filename }
   const [pendingAttachment, setPendingAttachment] = useState(null)
   const [historyLoading, setHistoryLoading] = useState(true)
+  // Server masih mengekstrak/OCR berkas yang diunggah — dipakai tombol upload
+  // untuk menahan spinner dengan label "Memproses...".
+  const [uploadProcessing, setUploadProcessing] = useState(false)
 
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
@@ -188,7 +198,57 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
     }
   }
 
-  const handleUploadSuccess = (result) => {
+  // Mulai memantau satu pekerjaan unggahan sampai selesai. Dipakai dua kali:
+  // tepat setelah berkas diunggah, dan saat halaman dibuka ulang untuk
+  // melanjutkan pekerjaan yang ditinggal (lihat useEffect di bawah).
+  const trackUploadJob = async (jobId, previewUrl, fileSize, signal) => {
+    setUploadProcessing(true)
+    try {
+      const job = await waitForUploadJob(jobId, { signal })
+      if (job) applyUploadResult({ ...job, previewUrl, fileSize })
+    } catch {
+      notify('Gagal memeriksa status pemrosesan berkas.', true)
+    } finally {
+      localStorage.removeItem(PENDING_UPLOAD_KEY)
+      setUploadProcessing(false)
+    }
+  }
+
+  const handleJobStarted = ({ jobId, filename, previewUrl, fileSize }) => {
+    // Disimpan supaya pekerjaan tetap bisa dilanjutkan kalau halaman ditutup
+    // atau dimuat ulang saat OCR masih berjalan — tanpa ini job_id hilang dan
+    // dokumen yang sudah selesai diproses tidak pernah terpasang sebagai
+    // lampiran. previewUrl (blob) sengaja TIDAK disimpan: URL blob hanya
+    // berlaku selama halaman itu hidup, jadi setelah dimuat ulang lampiran
+    // tampil sebagai chip ikon+nama, bukan thumbnail.
+    try {
+      localStorage.setItem(PENDING_UPLOAD_KEY, JSON.stringify({ jobId, filename }))
+    } catch {
+      // Mode privat / penyimpanan penuh — pemantauan tetap jalan di sesi ini,
+      // hanya kemampuan melanjutkan setelah reload yang hilang.
+    }
+    trackUploadJob(jobId, previewUrl, fileSize)
+  }
+
+  // Lanjutkan pekerjaan yang ditinggal saat halaman ditutup/dimuat ulang.
+  useEffect(() => {
+    let simpanan
+    try {
+      simpanan = JSON.parse(localStorage.getItem(PENDING_UPLOAD_KEY) || 'null')
+    } catch {
+      simpanan = null
+    }
+    if (!simpanan?.jobId) return
+
+    const controller = new AbortController()
+    trackUploadJob(simpanan.jobId, null, null, controller.signal)
+    return () => controller.abort()
+    // Sengaja hanya saat mount: pekerjaan yang tertinggal cuma perlu
+    // dilanjutkan sekali, bukan tiap kali pindah sesi.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const applyUploadResult = (result) => {
     // Hanya status "done" yang berarti teksnya benar-benar masuk knowledge
     // base. "warning" (tidak ada teks terbaca — mis. gambar buram) dan
     // "failed" (berkas rusak, Ollama mati di tengah jalan) ditampilkan merah
@@ -204,11 +264,15 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
     // tersendiri — file jadi lampiran di composer (banner di bawah),
     // baru "masuk" ke percakapan saat user benar-benar menekan kirim.
     if (result.stored_filename) {
-      // Ditentukan dari ada/tidaknya pratinjau (hanya gambar yang punya), bukan
-      // dari status upload: sejak gambar ikut diindeks ke knowledge base,
-      // backend membalas "processed" untuk gambar maupun dokumen. Tipe ini
-      // cuma menentukan tampilan (ikon, prompt bawaan), bukan cara merujuknya.
-      const type = result.previewUrl ? 'image' : 'document'
+      // Ditentukan dari ekstensi nama berkas, BUKAN dari ada/tidaknya
+      // pratinjau: pratinjau (blob URL) hilang setelah halaman dimuat ulang,
+      // sehingga gambar yang pemrosesannya dilanjutkan setelah reload akan
+      // salah dikenali sebagai dokumen — ikonnya keliru dan prompt bawaannya
+      // menawarkan "ringkasan" alih-alih "baca teksnya". Tipe ini hanya
+      // menentukan tampilan, bukan cara lampiran dirujuk ke backend.
+      const type = IMAGE_EXTENSIONS.some((e) => result.filename?.toLowerCase().endsWith(e))
+        ? 'image'
+        : 'document'
       setPendingAttachment({
         type,
         filename: result.filename,
@@ -403,8 +467,9 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
         >
           <div className="ml-1 mb-1">
             <UploadButton
-              onUploadSuccess={handleUploadSuccess}
+              onJobStarted={handleJobStarted}
               onError={(msg) => notify(msg, true)}
+              processing={uploadProcessing}
             />
           </div>
 
