@@ -12,6 +12,13 @@ const DEFAULT_PROMPT = {
   document: 'Ringkas isi dokumen ini.',
 }
 
+const formatBytes = (bytes) => {
+  if (!bytes && bytes !== 0) return ''
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
 export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSidebar }) {
   const [messages, setMessages]   = useState([])
   const [input, setInput]         = useState('')
@@ -33,9 +40,11 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
   }, [messages, loading])
 
   // Muat riwayat setiap kali sessionId berganti (klik sesi lain di sidebar,
-  // atau "Percakapan Baru"). Riwayat lama tidak menyimpan tool_used/sources
-  // (kolomnya tidak ada di tabel chat_history) — badge & sitasi cuma
-  // tersedia untuk pesan yang baru dikirim di sesi berjalan ini.
+  // atau "Percakapan Baru"). Badge tool/sitasi & info lampiran ikut tersimpan
+  // di backend jadi tetap tampil konsisten setelah pindah sesi — hanya
+  // thumbnail gambar asli yang tidak bisa dipulihkan (blob URL sisi-klien,
+  // bukan file yang disimpan), jadi lampiran lama tampil sebagai chip
+  // ikon+nama, bukan pratinjau gambar penuh.
   useEffect(() => {
     let cancelled = false
     setHistoryLoading(true)
@@ -47,7 +56,16 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
       .then((rows) => {
         if (cancelled) return
         setMessages(
-          rows.map((r) => ({ id: r.id, role: r.role, message: r.message }))
+          rows.map((r) => ({
+            id: r.id,
+            role: r.role,
+            message: r.message,
+            toolUsed: r.tool_used,
+            sources: r.sources,
+            attachment: r.attachment_type
+              ? { type: r.attachment_type, filename: r.attachment_filename, previewUrl: null }
+              : null,
+          }))
         )
       })
       .catch(() => {
@@ -74,7 +92,16 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
     const text = input.trim() || (attachment ? DEFAULT_PROMPT[attachment.type] : '')
     if (!text || loading) return
 
-    const userMsg = { role: 'user', message: text, id: Date.now() }
+    const userMsg = {
+      role: 'user',
+      message: text,
+      id: Date.now(),
+      // Preview ikut dibawa ke bubble pesan supaya lampiran tetap terlihat
+      // di riwayat chat sesi berjalan (blob URL, hilang setelah reload).
+      attachment: attachment
+        ? { type: attachment.type, filename: attachment.filename, previewUrl: attachment.previewUrl }
+        : null,
+    }
     setMessages((prev) => [...prev, userMsg])
     setInput('')
     setLoading(true)
@@ -159,6 +186,9 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
 
   const handleUploadSuccess = (result) => {
     notify(`✅ ${result.message}`)
+    // Lampiran sebelumnya dibatalkan tanpa pernah terkirim (mis. ganti file
+    // sebelum menekan kirim) — blob URL-nya tidak dipakai lagi, lepaskan.
+    if (pendingAttachment?.previewUrl) URL.revokeObjectURL(pendingAttachment.previewUrl)
     // Sama seperti ChatGPT/Gemini: upload TIDAK membuat giliran chat
     // tersendiri — file jadi lampiran di composer (banner di bawah),
     // baru "masuk" ke percakapan saat user benar-benar menekan kirim.
@@ -168,6 +198,8 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
         type,
         filename: result.filename,
         stored_filename: result.stored_filename,
+        previewUrl: result.previewUrl || null,
+        fileSize: result.fileSize,
       })
     }
   }
@@ -230,7 +262,7 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
               className="w-16 h-16 rounded-[1.5rem] flex items-center justify-center text-3xl"
               style={{ background: 'linear-gradient(135deg, rgba(6,182,212,0.1), rgba(168,85,247,0.1))', border: '1px solid rgba(168,85,247,0.2)' }}
             >
-              🤖
+              <Bot size={32} className="text-white drop-shadow-md" />
             </div>
             <div>
               <p className="font-bold text-xl mb-2 tracking-tight" style={{ color: 'var(--text-primary)' }}>Siap Membantu Anda</p>
@@ -269,6 +301,7 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
             toolUsed={msg.toolUsed}
             sources={msg.sources}
             isStreaming={msg.streaming}
+            attachment={msg.attachment}
           />
         ))}
 
@@ -316,16 +349,34 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
           className="mx-4 sm:mx-8 mb-3 flex items-center justify-between gap-3 px-4 py-3 rounded-2xl text-xs slide-up-fade shadow-lg backdrop-blur-md"
           style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', color: '#93c5fd' }}
         >
-          <div className="flex items-center gap-2">
-            {pendingAttachment.type === 'image' ? <ImageIcon size={16} /> : <FileText size={16} />}
-            <span>
-              <code className="bg-blue-900/30 px-1.5 py-0.5 rounded text-blue-200">{pendingAttachment.filename}</code>{' '}
-              siap dianalisis — ketik pertanyaan atau langsung tekan kirim untuk{' '}
+          <div className="flex items-center gap-3 min-w-0">
+            {pendingAttachment.type === 'image' && pendingAttachment.previewUrl ? (
+              <img
+                src={pendingAttachment.previewUrl}
+                alt={pendingAttachment.filename}
+                onClick={() => window.open(pendingAttachment.previewUrl, '_blank')}
+                title="Klik untuk memperbesar"
+                className="w-11 h-11 rounded-lg object-cover flex-shrink-0 border border-blue-400/30 cursor-zoom-in"
+              />
+            ) : (
+              <div className="w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(59,130,246,0.15)' }}>
+                {pendingAttachment.type === 'image' ? <ImageIcon size={18} /> : <FileText size={18} />}
+              </div>
+            )}
+            <span className="min-w-0 truncate">
+              <code className="bg-blue-900/30 px-1.5 py-0.5 rounded text-blue-200">{pendingAttachment.filename}</code>
+              {pendingAttachment.fileSize != null && (
+                <span className="opacity-70"> &middot; {formatBytes(pendingAttachment.fileSize)}</span>
+              )}
+              {' '}siap dianalisis — ketik pertanyaan atau langsung tekan kirim untuk{' '}
               {pendingAttachment.type === 'image' ? 'baca teksnya' : 'ringkasan otomatis'}
             </span>
           </div>
           <button
-            onClick={() => setPendingAttachment(null)}
+            onClick={() => {
+              if (pendingAttachment.previewUrl) URL.revokeObjectURL(pendingAttachment.previewUrl)
+              setPendingAttachment(null)
+            }}
             className="w-6 h-6 rounded-full flex items-center justify-center bg-blue-500/20 hover:bg-blue-500/40 transition-colors flex-shrink-0"
             title="Batalkan lampiran"
           >

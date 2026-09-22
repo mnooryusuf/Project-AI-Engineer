@@ -18,6 +18,13 @@ class ChatHistory(Base):
     session_id = Column(String(100), nullable=False, index=True)
     role = Column(String(20), nullable=False)  # user | assistant | system | tool
     message = Column(Text, nullable=False)
+    # Badge tool (rag_search/image_ocr/sql_query/dst) & sitasi jawaban asisten,
+    # ditambahkan lewat migrasi ringan di main.py — baris lama tetap NULL.
+    tool_used = Column(String(50), nullable=True)
+    sources = Column(JSON, nullable=True)
+    # Lampiran (gambar/dokumen) yang disertakan pesan user ini, kalau ada.
+    attachment_type = Column(String(20), nullable=True)  # image | document
+    attachment_filename = Column(String(255), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 

@@ -20,11 +20,17 @@ export default function UploadButton({ onUploadSuccess, onError }) {
       return
     }
 
+    // Preview dibuat dari File object di browser (blob URL) — tidak perlu
+    // menunggu upload selesai atau memanggil endpoint tambahan di backend.
+    const isImage = file.type.startsWith('image/')
+    const previewUrl = isImage ? URL.createObjectURL(file) : null
+
     setUploading(true)
     try {
       const result = await uploadFile(file)
-      onUploadSuccess?.(result)
+      onUploadSuccess?.({ ...result, previewUrl, fileSize: file.size })
     } catch (err) {
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
       onError?.(err.response?.data?.detail || 'Upload gagal.')
     } finally {
       setUploading(false)

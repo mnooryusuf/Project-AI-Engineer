@@ -4,6 +4,7 @@ Agentic RAG Local AI System
 """
 import json
 import os
+import re
 import uuid
 import aiofiles
 from pathlib import Path
@@ -34,6 +35,28 @@ from services.file_validation import verify_file_signature
 # ── Init ────────────────────────────────────────────────
 settings = get_settings()
 Base.metadata.create_all(bind=engine)
+
+# Migrasi ringan: kolom-kolom ini ditambahkan ke ChatHistory belakangan
+# (badge tool/sitasi/lampiran di riwayat chat) — create_all() di atas hanya
+# membuat tabel yang BELUM ada, tidak meng-ALTER tabel chat_history yang
+# sudah ada dari deployment sebelumnya. Idempotent, aman dijalankan tiap start.
+with engine.begin() as conn:
+    conn.execute(text("""
+        ALTER TABLE chat_history
+            ADD COLUMN IF NOT EXISTS tool_used VARCHAR(50),
+            ADD COLUMN IF NOT EXISTS sources JSON,
+            ADD COLUMN IF NOT EXISTS attachment_type VARCHAR(20),
+            ADD COLUMN IF NOT EXISTS attachment_filename VARCHAR(255)
+    """))
+
+# Nama file gambar disimpan di disk dengan prefix "{uuid_hex}_" (lihat
+# /upload) — untuk ditampilkan di riwayat chat, prefix ini dibuang supaya
+# yang terlihat nama file aslinya, bukan nama internal storage.
+_UUID_PREFIX_RE = re.compile(r"^[0-9a-f]{32}_")
+
+
+def _display_filename(stored_name: str) -> str:
+    return _UUID_PREFIX_RE.sub("", stored_name, count=1)
 
 app = FastAPI(
     title="Agentic RAG API",
@@ -182,11 +205,17 @@ async def chat(
     # Simpan pesan user — ini masih aman pakai `db` dari Depends(get_db)
     # karena terjadi sebelum StreamingResponse dikembalikan (sinkron, bukan
     # bagian dari body generator).
+    attachment_type = "image" if request.image_filename else ("document" if request.document_filename else None)
     db.add(ChatHistory(
         user_id=user_id,
         session_id=request.session_id,
         role="user",
         message=request.message,
+        attachment_type=attachment_type,
+        attachment_filename=(
+            _display_filename(request.image_filename or request.document_filename)
+            if attachment_type else None
+        ),
     ))
     db.commit()
 
@@ -216,12 +245,17 @@ async def chat(
     async def event_stream():
         stream_db = SessionLocal()
         full_answer = ""
+        meta_tool_used = None
+        meta_sources = None
         try:
             async for event in run_agent_stream(
                 question=request.message, db=stream_db, image_path=image_path,
                 document_filename=document_filename,
             ):
-                if event["type"] == "token":
+                if event["type"] == "meta":
+                    meta_tool_used = event.get("tool_used")
+                    meta_sources = event.get("sources")
+                elif event["type"] == "token":
                     full_answer += event["text"]
                 yield json.dumps(event) + "\n"
         except Exception as e:
@@ -230,13 +264,17 @@ async def chat(
             # Simpan apa pun yang sempat terkirim ke user — termasuk kalau
             # error terjadi di tengah jalan, supaya riwayat tetap
             # mencerminkan yang benar-benar dilihat user, bukan hilang begitu
-            # saja.
+            # saja. tool_used/sources ikut disimpan supaya badge & sitasi
+            # tetap tampil konsisten saat riwayat ini dimuat ulang nanti
+            # (pindah sesi lalu balik lagi, atau reload halaman).
             if full_answer:
                 stream_db.add(ChatHistory(
                     user_id=user_id,
                     session_id=request.session_id,
                     role="assistant",
                     message=full_answer,
+                    tool_used=meta_tool_used,
+                    sources=meta_sources,
                 ))
                 stream_db.commit()
             stream_db.close()

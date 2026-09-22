@@ -65,6 +65,10 @@ class ChatHistoryItem(BaseModel):
     role: str
     message: str
     created_at: datetime
+    tool_used: Optional[str] = None
+    sources: Optional[List[SourceInfo]] = None
+    attachment_type: Optional[str] = None
+    attachment_filename: Optional[str] = None
 
     class Config:
         from_attributes = True

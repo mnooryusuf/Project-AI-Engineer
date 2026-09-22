@@ -71,7 +71,7 @@ function CopyButton({ text }) {
   )
 }
 
-export default function MessageBubble({ role, message, toolUsed, sources, isStreaming }) {
+export default function MessageBubble({ role, message, toolUsed, sources, isStreaming, attachment }) {
   const isUser = role === 'user'
   const tool = TOOL_LABELS[toolUsed] || null
 
@@ -83,11 +83,30 @@ export default function MessageBubble({ role, message, toolUsed, sources, isStre
   if (isUser) {
     return (
       <div className="slide-up-fade flex justify-end mb-6">
-        <div
-          className="max-w-[85%] sm:max-w-[70%] px-4 py-2.5 rounded-[20px] rounded-tr-[4px] text-[14.5px] leading-relaxed shadow-sm"
-          style={{ background: 'linear-gradient(135deg, var(--accent-blue), var(--accent-purple))' }}
-        >
-          <p className="text-white font-medium whitespace-pre-wrap">{message}</p>
+        <div className="max-w-[85%] sm:max-w-[70%] flex flex-col items-end gap-1.5">
+          {attachment?.previewUrl && (
+            <img
+              src={attachment.previewUrl}
+              alt={attachment.filename}
+              onClick={() => window.open(attachment.previewUrl, '_blank')}
+              title="Klik untuk memperbesar"
+              className="max-w-[200px] max-h-[200px] rounded-2xl object-cover border border-white/10 shadow-sm cursor-zoom-in"
+            />
+          )}
+          {attachment && !attachment.previewUrl && (
+            <span
+              className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg"
+              style={{ background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.85)' }}
+            >
+              {attachment.type === 'image' ? <Image size={13} /> : <FileText size={13} />} {attachment.filename}
+            </span>
+          )}
+          <div
+            className="px-4 py-2.5 rounded-[20px] rounded-tr-[4px] text-[14.5px] leading-relaxed shadow-sm"
+            style={{ background: 'linear-gradient(135deg, var(--accent-blue), var(--accent-purple))' }}
+          >
+            <p className="text-white font-medium whitespace-pre-wrap">{message}</p>
+          </div>
         </div>
       </div>
     )
