@@ -1,0 +1,25 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: agentic-rag-db
+    environment:
+      POSTGRES_DB: agentic_rag
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: mysecretpassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
+    # Batasi RAM untuk mesin 8GB
+    shm_size: 128mb
+    command: >
+      postgres
+      -c shared_buffers=128MB
+      -c work_mem=16MB
+      -c maintenance_work_mem=64MB
+      -c max_connections=20
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

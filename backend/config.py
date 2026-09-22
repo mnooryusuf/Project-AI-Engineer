@@ -1,0 +1,66 @@
+"""
+config.py — Konfigurasi aplikasi dari .env
+"""
+from pathlib import Path
+
+from pydantic_settings import BaseSettings
+from functools import lru_cache
+
+# Root project (satu level di atas folder backend/). Semua path ditambatkan ke
+# sini supaya konfigurasi tidak berubah-ubah mengikuti direktori kerja.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+class Settings(BaseSettings):
+    # App
+    app_env: str = "development"
+
+    # Database
+    database_url: str = "postgresql://postgres:mysecretpassword@localhost:5432/agentic_rag"
+
+    # Koneksi terpisah untuk SQL_QUERY tool — role PostgreSQL yang secara
+    # fisik hanya punya GRANT SELECT pada chat_history & documents (lihat
+    # init.sql). Query yang dihasilkan LLM dieksekusi lewat koneksi ini,
+    # bukan lewat `database_url` di atas, supaya proteksinya tidak 100%
+    # bergantung pada validasi level-aplikasi di sql_tool.py.
+    database_url_readonly: str = (
+        "postgresql://agentic_rag_readonly:readonly_agent_pw_2026@localhost:5432/agentic_rag"
+    )
+
+    # Ollama
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_llm_model: str = "llama3.2:1b"
+    ollama_embedding_model: str = "all-minilm"
+
+    # Storage
+    upload_dir: str = "./storage/uploads"
+    processed_dir: str = "./storage/processed"
+
+    # CORS
+    cors_origins: str = "http://localhost:5173"
+
+    # JWT Auth
+    secret_key: str = "ganti-dengan-secret-key-yang-kuat-minimal-32-karakter"
+    algorithm: str = "HS256"
+    access_token_expire_minutes: int = 60
+
+    class Config:
+        # Path absolut, bukan ".env": uvicorn dijalankan dari dalam backend/
+        # sehingga path relatif tidak menemukan .env di root project dan
+        # seluruh nilai di bawah ini akan diam-diam memakai default.
+        env_file = PROJECT_ROOT / ".env"
+        env_file_encoding = "utf-8"
+
+
+@lru_cache()
+def get_settings() -> Settings:
+    settings = Settings()
+
+    # Path penyimpanan ikut ditambatkan ke root project supaya file tidak
+    # tersebar ke folder storage/ bayangan di dalam backend/.
+    for field in ("upload_dir", "processed_dir"):
+        value = Path(getattr(settings, field))
+        if not value.is_absolute():
+            setattr(settings, field, str((PROJECT_ROOT / value).resolve()))
+
+    return settings
