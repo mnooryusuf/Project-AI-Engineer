@@ -3,6 +3,7 @@ import MessageBubble from './MessageBubble'
 import UploadButton from './UploadButton'
 import { sendMessageStream, getChatHistory } from '../services/api'
 import { Bot, FileText, Image as ImageIcon, Database, X, CheckCircle, AlertTriangle } from 'lucide-react'
+import Mascot from './Mascot'
 
 // Prompt bawaan saat user melampirkan file lalu langsung menekan kirim
 // tanpa mengetik apa pun — pola yang sama dipakai ChatGPT/Gemini: lampirkan
@@ -271,13 +272,8 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
       {/* ── Messages ────────────────────────────── */}
       <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 relative z-10 scroll-smooth">
         {!historyLoading && messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full gap-5 text-center slide-up-fade">
-            <div
-              className="w-16 h-16 rounded-[1.5rem] flex items-center justify-center text-3xl"
-              style={{ background: 'linear-gradient(135deg, rgba(6,182,212,0.1), rgba(168,85,247,0.1))', border: '1px solid rgba(168,85,247,0.2)' }}
-            >
-              <Bot size={32} className="text-white drop-shadow-md" />
-            </div>
+          <div className="flex flex-col items-center justify-center h-full text-center slide-up-fade px-4 sm:px-8 mt-4 sm:mt-0">
+            <Mascot size={72} className="mb-4 drop-shadow-lg" />
             <div>
               <p className="font-bold text-xl mb-2 tracking-tight" style={{ color: 'var(--text-primary)' }}>Halo, saya Nanang</p>
               <p className="text-sm max-w-md mx-auto" style={{ color: 'var(--text-muted)' }}>

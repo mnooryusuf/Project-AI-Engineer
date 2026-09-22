@@ -154,3 +154,44 @@ html, body, #root {
   border-color: rgba(59,130,246,0.5) !important;
   box-shadow: 0 0 0 4px rgba(59,130,246,0.1) !important;
 }
+
+/* Mascot Animations */
+.mascot-float {
+  animation: mascotFloat 4s ease-in-out infinite;
+}
+.mascot-spin {
+  transform-origin: center;
+  animation: mascotSpin 15s linear infinite;
+}
+.mascot-spin-reverse {
+  transform-origin: center;
+  animation: mascotSpinReverse 20s linear infinite;
+}
+.mascot-blink {
+  transform-origin: center;
+  animation: mascotBlink 5s infinite;
+}
+.mascot-pulse {
+  animation: mascotPulse 2s ease-in-out infinite;
+}
+
+@keyframes mascotFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes mascotSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes mascotSpinReverse {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+@keyframes mascotBlink {
+  0%, 96%, 98%, 100% { transform: scaleY(1); }
+  97% { transform: scaleY(0.1); }
+}
+@keyframes mascotPulse {
+  0%, 100% { opacity: 1; filter: drop-shadow(0 0 4px var(--accent-cyan)); }
+  50% { opacity: 0.5; filter: drop-shadow(0 0 1px var(--accent-cyan)); }
+}

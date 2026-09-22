@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Bot, FileText, Image, Database, MessageSquare, Paperclip, Check } from 'lucide-react'
+import Mascot from './Mascot'
 
 const TOOL_LABELS = {
   rag_search:      { label: 'RAG Dokumen', icon: <FileText size={14} />, color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
@@ -114,13 +115,8 @@ export default function MessageBubble({ role, message, toolUsed, sources, isStre
 
   return (
     <div className="slide-up-fade group/msg flex gap-3.5 mb-6 max-w-[720px]">
-      <div
-        className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm shadow-sm mt-1"
-        style={{ background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue))' }}
-      >
-        <Bot size={18} className="text-white drop-shadow-md" />
-      </div>
-
+      <Mascot size={34} className="flex-shrink-0 mt-0.5 drop-shadow-sm" />
+      
       <div className="flex-1 min-w-0 flex flex-col gap-2 bg-[var(--overlay-1)] px-5 py-4 rounded-[20px] rounded-tl-[4px] border border-[var(--glass-border)] shadow-sm">
         {tool && (
           <span

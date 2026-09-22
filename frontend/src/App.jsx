@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid'
 import ChatBox from './components/ChatBox'
 import Sidebar from './components/Sidebar'
 import DocumentsPanel from './components/DocumentsPanel'
+import Mascot from './components/Mascot'
 import { login, register, getChatSessions } from './services/api'
 
 function LoginPage({ onLogin }) {
@@ -47,12 +48,7 @@ function LoginPage({ onLogin }) {
       <div className="w-full max-w-sm slide-up-fade">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div
-            className="w-20 h-20 rounded-[1.25rem] flex items-center justify-center mx-auto mb-5 shadow-xl"
-            style={{ background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue), var(--accent-purple))' }}
-          >
-            <Bot size={44} className="text-white drop-shadow-md" />
-          </div>
+          <Mascot size={80} className="mx-auto mb-5 drop-shadow-xl" />
           <h1 className="text-3xl font-bold gradient-text tracking-tight mb-1.5">Nanang</h1>
           <p className="text-[11px] italic leading-snug mb-2 px-4" style={{ color: 'var(--text-muted)', opacity: 0.7 }}>
             Naskah, Arsip, dan Navigasi Analitik nan Gesit
