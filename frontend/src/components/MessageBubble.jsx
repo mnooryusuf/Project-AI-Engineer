@@ -1,12 +1,13 @@
 // src/components/MessageBubble.jsx
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import { Bot, FileText, Image, Database, MessageSquare, Paperclip } from 'lucide-react'
 
 const TOOL_LABELS = {
-  rag_search:    { label: 'RAG Dokumen', icon: '📄', color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
-  image_ocr:     { label: 'OCR Gambar',  icon: '📷', color: '#a855f7', bg: 'rgba(168,85,247,0.1)' },
-  sql_query:     { label: 'SQL Query',   icon: '🗄️', color: '#06b6d4', bg: 'rgba(6,182,212,0.1)' },
-  direct_answer: { label: 'Jawaban Langsung', icon: '💬', color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
+  rag_search:    { label: 'RAG Dokumen', icon: <FileText size={14} />, color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
+  image_ocr:     { label: 'OCR Gambar',  icon: <Image size={14} />, color: '#a855f7', bg: 'rgba(168,85,247,0.1)' },
+  sql_query:     { label: 'SQL Query',   icon: <Database size={14} />, color: '#06b6d4', bg: 'rgba(6,182,212,0.1)' },
+  direct_answer: { label: 'Jawaban Langsung', icon: <MessageSquare size={14} />, color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
 }
 
 // Overlay tombol "Salin" pada blok kode — hanya muncul saat hover, mengikuti
@@ -89,15 +90,15 @@ export default function MessageBubble({ role, message, toolUsed, sources, isStre
   }
 
   return (
-    <div className="slide-up-fade group/msg flex gap-3 mb-6 max-w-[720px]">
+    <div className="slide-up-fade group/msg flex gap-3.5 mb-6 max-w-[720px]">
       <div
-        className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs shadow-sm mt-0.5"
+        className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm shadow-sm mt-1"
         style={{ background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue))' }}
       >
-        🤖
+        <Bot size={18} className="text-white drop-shadow-md" />
       </div>
 
-      <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+      <div className="flex-1 min-w-0 flex flex-col gap-2 bg-[var(--overlay-1)] px-5 py-4 rounded-[20px] rounded-tl-[4px] border border-[var(--glass-border)] shadow-sm">
         {tool && (
           <span
             className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md self-start"
@@ -136,7 +137,7 @@ export default function MessageBubble({ role, message, toolUsed, sources, isStre
                 className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-md transition-colors hover:bg-blue-500/20 cursor-default"
                 style={{ background: 'rgba(59,130,246,0.1)', color: '#93c5fd', border: '1px solid rgba(59,130,246,0.2)' }}
               >
-                📎 <span className="opacity-90">{src.filename}</span>
+                <Paperclip size={12} /> <span className="opacity-90">{src.filename}</span>
               </span>
             ))}
           </div>

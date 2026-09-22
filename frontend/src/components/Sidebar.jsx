@@ -1,5 +1,6 @@
 // src/components/Sidebar.jsx — Daftar riwayat percakapan, gaya restrained
 // (bukan neon) seperti sidebar ChatGPT/Gemini.
+import { FileText, Sun, Moon } from 'lucide-react'
 function formatRelativeTime(iso) {
   const date = new Date(iso + (iso.endsWith('Z') ? '' : 'Z'))
   const diffMs = Date.now() - date.getTime()
@@ -49,10 +50,14 @@ export default function Sidebar({
           <button
             id="new-chat-btn"
             onClick={onNewChat}
-            className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 hover:bg-[var(--overlay-2)]"
-            style={{ border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-[15px] font-semibold transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5"
+            style={{ 
+              background: 'linear-gradient(135deg, var(--accent-blue), var(--accent-purple))', 
+              color: '#ffffff',
+              border: 'none'
+            }}
           >
-            <span className="text-base leading-none">+</span>
+            <span className="text-lg leading-none">+</span>
             Percakapan Baru
           </button>
         </div>
@@ -70,15 +75,16 @@ export default function Sidebar({
                   <li key={s.session_id}>
                     <button
                       onClick={() => onSelectSession(s.session_id)}
-                      className="w-full text-left px-3 py-2.5 rounded-xl text-sm truncate transition-colors duration-150"
+                      className="w-full text-left px-3 py-3 rounded-xl text-sm truncate transition-all duration-200 border-l-2"
                       style={{
                         background: active ? 'var(--overlay-2)' : 'transparent',
+                        borderColor: active ? 'var(--accent-blue)' : 'transparent',
                         color: active ? 'var(--text-primary)' : 'var(--text-muted)',
                       }}
                       title={s.title}
                     >
-                      <span className="block truncate">{s.title || '(percakapan kosong)'}</span>
-                      <span className="block text-[11px] opacity-60 mt-0.5">
+                      <span className="block truncate font-medium">{s.title || '(percakapan kosong)'}</span>
+                      <span className="block text-[11px] opacity-70 mt-1">
                         {formatRelativeTime(s.last_activity)}
                       </span>
                     </button>
@@ -96,7 +102,7 @@ export default function Sidebar({
             className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 hover:bg-[var(--overlay-2)]"
             style={{ color: 'var(--text-muted)' }}
           >
-            📄 Dokumen
+            <FileText size={16} /> Dokumen
           </button>
           <button
             id="toggle-theme-btn"
@@ -104,7 +110,7 @@ export default function Sidebar({
             className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 hover:bg-[var(--overlay-2)]"
             style={{ color: 'var(--text-muted)' }}
           >
-            {theme === 'dark' ? '☀️ Mode Terang' : '🌙 Mode Gelap'}
+            {theme === 'dark' ? <><Sun size={16} /> Mode Terang</> : <><Moon size={16} /> Mode Gelap</>}
           </button>
         </div>
       </aside>

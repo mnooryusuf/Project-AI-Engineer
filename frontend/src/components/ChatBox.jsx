@@ -1,8 +1,8 @@
-// src/components/ChatBox.jsx
 import { useEffect, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
 import UploadButton from './UploadButton'
 import { sendMessageStream, getChatHistory } from '../services/api'
+import { Bot, FileText, Image as ImageIcon, Database } from 'lucide-react'
 
 export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSidebar }) {
   const [messages, setMessages]   = useState([])
@@ -182,7 +182,7 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
             className="w-9 h-9 rounded-2xl flex items-center justify-center shadow-lg"
             style={{ background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue))' }}
           >
-            <span className="text-lg">🤖</span>
+            <Bot size={22} className="text-white drop-shadow-md" />
           </div>
           <div>
             <h1 className="font-bold text-base gradient-text tracking-wide">Agentic RAG</h1>
@@ -226,21 +226,21 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
             </div>
             <div className="flex flex-wrap gap-3 justify-center mt-4">
               {[
-                '📄 Apa isi dokumen ini?',
-                '📷 Baca teks dari gambar',
-                '🗄️ Berapa jumlah chat hari ini?',
-              ].map((s, i) => (
+                { text: 'Apa isi dokumen ini?', icon: <FileText size={14} /> },
+                { text: 'Baca teks dari gambar', icon: <ImageIcon size={14} /> },
+                { text: 'Berapa jumlah chat hari ini?', icon: <Database size={14} /> },
+              ].map((item, i) => (
                 <button
                   key={i}
-                  onClick={() => setInput(s.slice(3))}
-                  className="text-xs font-medium px-4 py-2.5 rounded-full transition-colors duration-200 hover:text-white"
+                  onClick={() => setInput(item.text)}
+                  className="flex items-center gap-2 text-xs font-medium px-4 py-2.5 rounded-full transition-colors duration-200 hover:text-white"
                   style={{
                     background: 'var(--overlay-1)',
                     border: '1px solid var(--glass-border)',
                     color: 'var(--text-muted)',
                   }}
                 >
-                  {s}
+                  {item.icon} {item.text}
                 </button>
               ))}
             </div>
@@ -264,14 +264,14 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
             disembunyikan karena bubble yang tumbuh progresif sudah jadi
             indikator "sedang menjawab" yang lebih informatif. */}
         {loading && !messages[messages.length - 1]?.streaming && (
-          <div className="slide-up-fade flex gap-4 mb-6">
+          <div className="slide-up-fade flex gap-3.5 mb-6">
             <div
-              className="w-9 h-9 rounded-full flex items-center justify-center text-sm shadow-md flex-shrink-0"
+              className="w-8 h-8 rounded-full flex items-center justify-center text-sm shadow-sm flex-shrink-0 mt-1"
               style={{ background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue))' }}
             >
-              🤖
+              <Bot size={18} className="text-white drop-shadow-md" />
             </div>
-            <div className="flex items-center gap-2 px-5 py-4">
+            <div className="flex items-center gap-2 bg-[var(--overlay-1)] px-5 py-4 rounded-[20px] rounded-tl-[4px] border border-[var(--glass-border)] shadow-sm">
               <span className="typing-dot" />
               <span className="typing-dot" />
               <span className="typing-dot" />
@@ -303,7 +303,7 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
           style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', color: '#93c5fd' }}
         >
           <div className="flex items-center gap-2">
-            <span className="text-base">🖼️</span>
+            <ImageIcon size={16} />
             <span><code className="bg-blue-900/30 px-1.5 py-0.5 rounded text-blue-200">{pendingImage.filename}</code> siap dianalisis</span>
           </div>
           <button
