@@ -1,6 +1,9 @@
 // src/components/Sidebar.jsx — Daftar riwayat percakapan, gaya restrained
 // (bukan neon) seperti sidebar ChatGPT/Gemini.
-import { FileText, Sun, Moon } from 'lucide-react'
+import { useState } from 'react'
+import { FileText, Sun, Moon, Trash2, X } from 'lucide-react'
+import { deleteChatSession } from '../services/api'
+
 function formatRelativeTime(iso) {
   const date = new Date(iso + (iso.endsWith('Z') ? '' : 'Z'))
   const diffMs = Date.now() - date.getTime()
@@ -23,9 +26,30 @@ export default function Sidebar({
   isOpen,
   onClose,
   onOpenDocuments,
+  onSessionDeleted,
   theme,
   onToggleTheme,
 }) {
+  const [confirmingId, setConfirmingId] = useState(null)
+  const [deletingId, setDeletingId] = useState(null)
+
+  const handleDelete = async (id) => {
+    setDeletingId(id)
+    try {
+      await deleteChatSession(id)
+      onSessionDeleted?.(id)
+    } catch {
+      // Gagal (jaringan/server) — batalkan konfirmasi diam-diam, item tetap
+      // ada di daftar supaya user bisa coba lagi. Sidebar tidak punya sistem
+      // toast sendiri (itu ada di ChatBox), jadi tidak ada notifikasi error
+      // eksplisit di sini — kegagalan hapus cukup jarang & low-stakes untuk
+      // menambah state lintas-komponen demi ini.
+    } finally {
+      setDeletingId(null)
+      setConfirmingId(null)
+    }
+  }
+
   return (
     <>
       {/* Overlay mobile — tutup sidebar saat area luar ditekan */}
@@ -71,11 +95,12 @@ export default function Sidebar({
             <ul className="flex flex-col gap-0.5">
               {sessions.map((s) => {
                 const active = s.session_id === activeSessionId
+                const confirming = confirmingId === s.session_id
                 return (
-                  <li key={s.session_id}>
+                  <li key={s.session_id} className="group/session relative">
                     <button
                       onClick={() => onSelectSession(s.session_id)}
-                      className="w-full text-left px-3 py-3 rounded-xl text-sm truncate transition-all duration-200 border-l-2"
+                      className="w-full text-left px-3 py-3 pr-9 rounded-xl text-sm truncate transition-all duration-200 border-l-2"
                       style={{
                         background: active ? 'var(--overlay-2)' : 'transparent',
                         borderColor: active ? 'var(--accent-blue)' : 'transparent',
@@ -88,6 +113,40 @@ export default function Sidebar({
                         {formatRelativeTime(s.last_activity)}
                       </span>
                     </button>
+
+                    {/* Hapus — 2 langkah (klik ikon lalu konfirmasi) supaya
+                        tidak kehapus tidak sengaja saat scroll/klik cepat. */}
+                    {confirming ? (
+                      <div
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1 rounded-lg px-1 py-1"
+                        style={{ background: 'var(--bg-secondary)' }}
+                      >
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDelete(s.session_id) }}
+                          disabled={deletingId === s.session_id}
+                          className="text-[10px] font-semibold px-2 py-1 rounded-md"
+                          style={{ background: 'rgba(239,68,68,0.2)', color: '#fca5a5' }}
+                        >
+                          {deletingId === s.session_id ? '...' : 'Hapus?'}
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setConfirmingId(null) }}
+                          className="w-5 h-5 rounded-md flex items-center justify-center hover:bg-[var(--overlay-2)]"
+                          style={{ color: 'var(--text-muted)' }}
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setConfirmingId(s.session_id) }}
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg flex items-center justify-center opacity-0 group-hover/session:opacity-100 hover:bg-red-500/10 transition-opacity"
+                        style={{ color: 'var(--text-muted)' }}
+                        title="Hapus percakapan"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </li>
                 )
               })}

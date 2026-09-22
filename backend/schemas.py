@@ -44,6 +44,12 @@ class ChatRequest(BaseModel):
     # Nama file (bukan path lengkap) dari gambar yang sebelumnya diunggah lewat
     # /upload, jika pertanyaan ini merujuk pada gambar tersebut.
     image_filename: Optional[str] = None
+    # Sama seperti image_filename, tapi untuk dokumen PDF/TXT — kalau diisi,
+    # jawaban langsung dibangun dari isi dokumen ini (dicari by filename di
+    # tabel documents), BUKAN lewat similarity search umum. Dipakai saat user
+    # baru saja upload dokumen dan langsung bertanya, mirip pola lampiran
+    # file di ChatGPT/Gemini.
+    document_filename: Optional[str] = None
 
 class SourceInfo(BaseModel):
     filename: str

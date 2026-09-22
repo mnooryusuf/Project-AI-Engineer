@@ -53,7 +53,7 @@ export const register = async (username, email, password) => {
 //   onToken(text)   -> setiap potongan token jawaban
 //   onDone()        -> sekali, setelah stream selesai normal
 // Melempar Error kalau request gagal total (network/HTTP non-2xx).
-export const sendMessageStream = async (sessionId, message, imageFilename, callbacks = {}, signal) => {
+export const sendMessageStream = async (sessionId, message, imageFilename, documentFilename, callbacks = {}, signal) => {
   const { onMeta, onToken, onDone } = callbacks
   const token = localStorage.getItem('access_token')
 
@@ -63,7 +63,12 @@ export const sendMessageStream = async (sessionId, message, imageFilename, callb
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ session_id: sessionId, message, image_filename: imageFilename }),
+    body: JSON.stringify({
+      session_id: sessionId,
+      message,
+      image_filename: imageFilename,
+      document_filename: documentFilename,
+    }),
     signal,
   })
 
@@ -118,17 +123,23 @@ export const getChatSessions = async () => {
   return res.data
 }
 
+export const deleteChatSession = async (sessionId) => {
+  const res = await api.delete(`/chat/sessions/${encodeURIComponent(sessionId)}`)
+  return res.data
+}
+
 // ── Upload ────────────────────────────────────────────
-export const uploadFile = async (file, onProgress) => {
+// Sengaja tidak ada callback progress persentase — diukur langsung: transfer
+// byte selesai dalam <1ms di localhost, sementara pemrosesan server
+// (embedding dsb, 1-10 detik) tidak terukur oleh event upload-progress
+// browser sama sekali. Angka % di titik itu cuma menampilkan "100%" lalu
+// diam selama proses sebenarnya berjalan — terlihat macet padahal jujur
+// tidak ada cara mengukurnya presisi dari sisi client (lihat UploadButton.jsx).
+export const uploadFile = async (file) => {
   const form = new FormData()
   form.append('file', file)
   const res = await api.post('/upload', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
-    onUploadProgress: (e) => {
-      if (onProgress && e.total) {
-        onProgress(Math.round((e.loaded * 100) / e.total))
-      }
-    },
   })
   return res.data
 }

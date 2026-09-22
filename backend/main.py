@@ -203,12 +203,23 @@ async def chat(
         else:
             raise HTTPException(status_code=404, detail="Gambar tidak ditemukan.")
 
+    # Sama seperti image_filename, tapi cukup dicocokkan ke kolom filename di
+    # tabel documents (bukan path filesystem) — tidak ada risiko path
+    # traversal di sini karena tidak pernah dipakai untuk buka file di disk.
+    document_filename = None
+    if request.document_filename:
+        exists = db.query(Document.id).filter(Document.filename == request.document_filename).first()
+        if not exists:
+            raise HTTPException(status_code=404, detail="Dokumen tidak ditemukan di knowledge base.")
+        document_filename = request.document_filename
+
     async def event_stream():
         stream_db = SessionLocal()
         full_answer = ""
         try:
             async for event in run_agent_stream(
                 question=request.message, db=stream_db, image_path=image_path,
+                document_filename=document_filename,
             ):
                 if event["type"] == "token":
                     full_answer += event["text"]
@@ -294,6 +305,31 @@ def get_chat_sessions(
     ]
 
 
+@app.delete("/chat/sessions/{session_id}", tags=["Chat"])
+def delete_chat_session(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Hapus satu percakapan (semua pesan di session_id ini) milik user yang
+    sedang login. Difilter dengan user_id — sama seperti /chat/history,
+    supaya user tidak bisa menghapus percakapan user lain walau tahu/
+    menebak session_id-nya. Ini data personal (bukan knowledge base
+    bersama seperti /documents), jadi tidak ada pembatasan role — siapa
+    pun yang login boleh hapus percakapannya sendiri.
+    """
+    deleted = (
+        db.query(ChatHistory)
+        .filter(ChatHistory.session_id == session_id, ChatHistory.user_id == current_user.id)
+        .delete()
+    )
+    db.commit()
+    if deleted == 0:
+        raise HTTPException(status_code=404, detail="Percakapan tidak ditemukan.")
+    return {"session_id": session_id, "messages_deleted": deleted}
+
+
 # ── Upload Endpoints ─────────────────────────────────────
 
 @app.post("/upload", response_model=UploadResponse, tags=["Upload"])
@@ -349,6 +385,11 @@ async def upload_file(
             filename=original_filename,
             status="processed",
             message=f"Dokumen diproses: {chunks_saved} chunk disimpan ke knowledge base.",
+            # Sama seperti gambar: dikirim balik lewat ChatRequest.document_filename
+            # supaya pertanyaan berikutnya langsung fokus ke dokumen ini
+            # (bukan path lengkap di disk — di sini nilainya adalah kolom
+            # `filename` di tabel documents, dipakai untuk query langsung).
+            stored_filename=original_filename,
         )
 
     # Gambar disimpan saja, OCR dilakukan saat chat — lihat ChatRequest.image_filename

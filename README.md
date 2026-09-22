@@ -107,6 +107,18 @@ Project-AI-Engineer/
 └── .env.example
 ```
 
+## 📎 Attach-and-Analyze
+
+Upload dokumen (PDF/TXT) atau gambar jadi **lampiran di composer** (pola
+ChatGPT/Gemini) — belum masuk percakapan sampai ditekan kirim. Kirim boleh
+kosong (prompt bawaan otomatis: "Ringkas isi dokumen ini." / "Apa isi teks
+pada gambar ini?"). Jawaban dibangun **langsung dari dokumen yang baru
+diunggah** (`agent.py` mode `DOCUMENT_FOCUS`), bukan lewat similarity
+search — ini sengaja menghindari ambang similarity 0.55 yang terbukti bisa
+meleset (lihat § Catatan Teknis Penting). Badge "Analisis Dokumen" di
+jawaban menandai mode ini, beda dari "RAG Dokumen" (similarity search
+biasa, tetap dipakai untuk pertanyaan susulan lintas-dokumen).
+
 ## 🔒 Keamanan
 
 - **Authentication**: JWT untuk semua endpoint.

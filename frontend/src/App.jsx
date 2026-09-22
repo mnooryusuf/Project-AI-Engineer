@@ -1,5 +1,6 @@
 // src/App.jsx — Root Application dengan Auth flow (Premium UI)
 import { useState, useEffect, useCallback } from 'react'
+import { Bot, Loader2, AlertTriangle } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
 import ChatBox from './components/ChatBox'
 import Sidebar from './components/Sidebar'
@@ -47,10 +48,10 @@ function LoginPage({ onLogin }) {
         {/* Logo */}
         <div className="text-center mb-8">
           <div
-            className="w-20 h-20 rounded-[1.25rem] flex items-center justify-center text-5xl mx-auto mb-5 shadow-xl"
+            className="w-20 h-20 rounded-[1.25rem] flex items-center justify-center mx-auto mb-5 shadow-xl"
             style={{ background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue), var(--accent-purple))' }}
           >
-            🤖
+            <Bot size={44} className="text-white drop-shadow-md" />
           </div>
           <h1 className="text-3xl font-bold gradient-text tracking-tight mb-2">Agentic RAG</h1>
           <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
@@ -144,7 +145,7 @@ function LoginPage({ onLogin }) {
             {/* Error */}
             {error && (
               <div className="text-xs px-4 py-3 rounded-xl slide-up-fade flex items-center gap-2" style={{ background: 'rgba(239,68,68,0.1)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.2)' }}>
-                <span className="text-lg">⚠️</span> {error}
+                <AlertTriangle size={18} /> {error}
               </div>
             )}
 
@@ -153,10 +154,11 @@ function LoginPage({ onLogin }) {
               id="auth-submit-btn"
               type="submit"
               disabled={loading}
-              className="w-full mt-4 py-3.5 rounded-2xl text-sm font-bold text-white transition-all duration-200 hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
+              className="w-full mt-4 py-3.5 rounded-2xl text-sm font-bold text-white transition-all duration-200 hover:brightness-110 active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
               style={{ background: 'linear-gradient(135deg, var(--accent-blue), var(--accent-purple))' }}
             >
-              {loading ? '⏳ Memproses...' : mode === 'login' ? 'Masuk ke Sistem' : 'Buat Akun Sekarang'}
+              {loading && <Loader2 size={16} className="animate-spin" />}
+              {loading ? 'Memproses...' : mode === 'login' ? 'Masuk ke Sistem' : 'Buat Akun Sekarang'}
             </button>
           </form>
         </div>
@@ -235,6 +237,17 @@ export default function App() {
     setSidebarOpen(false)
   }
 
+  const handleSessionDeleted = (id) => {
+    setSessions((prev) => prev.filter((s) => s.session_id !== id))
+    // Kalau yang dihapus adalah percakapan yang sedang dibuka, jangan
+    // diam-diam lompat ke percakapan lama lain — mulai percakapan baru,
+    // konsisten dengan perilaku ChatGPT/Gemini saat conversation aktif
+    // dihapus.
+    if (id === sessionId) {
+      setSessionId(uuidv4())
+    }
+  }
+
   if (!isAuthenticated) {
     return <LoginPage onLogin={() => setIsAuthenticated(true)} />
   }
@@ -254,6 +267,7 @@ export default function App() {
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onOpenDocuments={() => { setDocumentsOpen(true); setSidebarOpen(false) }}
+        onSessionDeleted={handleSessionDeleted}
         theme={theme}
         onToggleTheme={toggleTheme}
       />

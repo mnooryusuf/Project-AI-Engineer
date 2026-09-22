@@ -204,6 +204,79 @@ Testing Matrix (dari implementation_plan.md):
    toggle ke light → reload halaman (bukan browser baru) → tema tetap
    light → toggle balik ke dark → berhasil kembali gelap.
 
+## ✅ Attach-and-Analyze (pola upload ChatGPT/Gemini)
+
+Sebelumnya: upload dokumen → diproses ke knowledge base → user harus tanya
+terpisah → jawaban lewat RAG_SEARCH (similarity search, threshold 0.55,
+rawan meleset — lihat README § "Risiko terkonfirmasi: sitasi palsu").
+
+Sekarang: upload → jadi lampiran di composer (banner, belum "terkirim") →
+kirim (boleh kosong — prompt bawaan otomatis: "Ringkas isi dokumen ini.")
+→ jawaban dibangun LANGSUNG dari chunk dokumen itu (by filename, tabel
+documents), **bukan** similarity search. Badge baru: "Analisis Dokumen"
+(`document_focus`), beda dari "RAG Dokumen" (`rag_search`, similarity
+search biasa — tetap ada untuk pertanyaan susulan/lintas-dokumen).
+
+**Bukti nyata kenapa ini penting** — diuji langsung membandingkan kedua
+cara pada dokumen & pertanyaan yang sama:
+- Skor similarity pertanyaan "Berapa total anggaran yang terserap?"
+  terhadap dokumen yang baru diunggah: **0.5137 — di BAWAH ambang 0.55**.
+- Cara lama (tanpa attach): `tool_used: direct_answer`, mengarang jawaban
+  generik ngawur soal "sistem anggaran pemerintah Indonesia" — sama
+  sekali tidak menyentuh angka aslinya.
+- Cara baru (attach): jawaban tepat **"1.250.000.000"** — akurat 100%,
+  juga untuk pertanyaan fakta spesifik lain (program realisasi terendah).
+
+Backend: `agent.py::_prepare_answer` — mode `DOCUMENT_FOCUS` baru,
+ambil maks 6 chunk langsung by filename (`DOCUMENT_FOCUS_MAX_CHUNKS`,
+dibatasi supaya konteks tidak melebihi num_ctx=2048; dokumen >6 chunk
+hanya sebagian dianalisis lewat mode ini — bagian lain tetap terjangkau
+lewat RAG_SEARCH biasa). `/upload` sekarang mengembalikan `stored_filename`
+untuk dokumen juga (sebelumnya cuma gambar).
+
+Frontend: `pendingImage` digeneralisasi jadi `pendingAttachment`
+(`{type: 'image'|'document', ...}`) — satu banner, satu jalur kode untuk
+kedua jenis lampiran. Tombol kirim aktif meski input kosong asal ada
+lampiran. Bubble notifikasi "File diterima" yang lama (giliran chat palsu)
+dihapus — sesuai pola ChatGPT/Gemini, upload tidak membuat giliran chat
+sendiri, cukup banner di composer.
+
+Diuji end-to-end lewat DOM sungguhan: attach → banner tampil, tombol kirim
+otomatis aktif → klik kirim kosong → prompt default terkirim & tampil di
+bubble user → badge "ANALISIS DOKUMEN" + sitasi benar → jawaban akurat.
+Regresi alur gambar (OCR) & smoke test penuh tetap lulus setelah refactor.
+
+## ✅ Hapus Riwayat Percakapan
+
+Tombol hapus (ikon tong sampah) muncul saat hover di tiap item sidebar,
+konfirmasi 2-langkah (klik ikon → "Hapus?"/✕), pola sama seperti hapus
+dokumen di panel Dokumen. Endpoint baru `DELETE /chat/sessions/{session_id}`
+— difilter `user_id` sama seperti `/chat/history`, jadi user tidak bisa
+menghapus percakapan user lain. **Diuji langsung**: user2 mencoba hapus
+sesi milik user1 → 404 (bukan berhasil), sesi user1 tetap utuh.
+
+Kalau yang dihapus adalah percakapan yang sedang dibuka, aplikasi otomatis
+pindah ke percakapan baru kosong — bukan diam-diam lompat ke percakapan
+lama lain (konsisten dengan pola ChatGPT/Gemini). Diuji end-to-end lewat
+DOM sungguhan: hapus sesi aktif → tampilan berpindah ke "Siap Membantu
+Anda", sesi hilang dari sidebar.
+
+## ✅ Indikator Upload Jujur (bukan progress % palsu)
+
+Ditemukan & diperbaiki: progress bar upload melompat ke 100% seketika lalu
+diam — **diukur langsung penyebabnya**: `time_pretransfer` (transfer byte
+selesai) = 0.3ms, `time_starttransfer` (server mulai balas setelah
+memproses) = ~436ms. `onUploadProgress` browser cuma melacak transfer byte
+(nyaris instan di localhost), sama sekali tidak melacak pemrosesan server
+(extract teks, chunk, generate embedding — bagian yang sebenarnya lambat).
+
+Diperbaiki: hapus angka % sepenuhnya, ganti spinner tak-tentu + teks
+"Mengunggah..." (tombol melebar jadi pill selama upload). `uploadFile()`
+di `api.js` juga disederhanakan — parameter `onProgress` dihapus karena
+memang tidak ada sinyal presisi yang bisa dilaporkannya. Diuji lewat DOM
+sungguhan: berhasil menangkap screenshot tepat di kondisi "Mengunggah..."
+sebelum selesai, tanpa angka palsu.
+
 ## 🔮 Post-MVP (opsional, belum disepakati — dari implementation_plan.md)
 Tidak dikerjakan kecuali diminta secara eksplisit:
 - Multi-Agent Architecture (Supervisor + specialized agents)

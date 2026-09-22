@@ -5,10 +5,21 @@ LLM memilih tool yang sesuai berdasarkan pertanyaan user.
 import json
 import re
 from sqlalchemy.orm import Session
+from models import Document
 from services.llm_service import ask_llm, stream_llm
 from tools.rag_tool import rag_search
 from tools.ocr_tool import extract_text_from_image
 from tools.sql_tool import run_sql_query
+
+# Batas jumlah chunk yang diambil untuk DOCUMENT_FOCUS (lihat _prepare_answer).
+# chunk_size=500 karakter (services/document_service.py) — 6 chunk ~3000
+# karakter, aman di dalam num_ctx=2048 token (llm_service.py) bersama
+# template prompt + pertanyaan + system prompt. Dokumen yang lebih panjang
+# dari ini hanya dianalisis sebagian lewat mode ini; RAG_SEARCH biasa (pilih
+# tool otomatis, bukan attach langsung) tetap mencari ke SELURUH isi dokumen
+# lewat similarity search, jadi bagian yang terpotong di sini masih bisa
+# dijangkau lewat pertanyaan lanjutan.
+DOCUMENT_FOCUS_MAX_CHUNKS = 6
 
 SYSTEM_PROMPT = """Kamu adalah AI Assistant yang berjalan secara lokal.
 
@@ -79,7 +90,7 @@ def _extract_sql(text: str) -> str:
     return match.group(0).rstrip(";").strip()
 
 
-async def _prepare_answer(question: str, db: Session, image_path: str = None):
+async def _prepare_answer(question: str, db: Session, image_path: str = None, document_filename: str = None):
     """
     Tahap 1 dari agent: tentukan tool, jalankan tool, susun prompt jawaban
     akhir. Dipakai bersama oleh run_agent() (non-streaming) dan
@@ -91,6 +102,8 @@ async def _prepare_answer(question: str, db: Session, image_path: str = None):
     """
     if image_path:
         tool_used = "IMAGE_OCR"
+    elif document_filename:
+        tool_used = "DOCUMENT_FOCUS"
     else:
         tool_used = await _determine_tool(question)
 
@@ -107,6 +120,25 @@ async def _prepare_answer(question: str, db: Session, image_path: str = None):
         tool_result = await extract_text_from_image(image_path)
         if tool_result["success"]:
             context = f"Teks dari gambar:\n{tool_result['text']}"
+
+    elif tool_used == "DOCUMENT_FOCUS" and document_filename:
+        # Ambil chunk milik dokumen ini LANGSUNG by filename, bukan lewat
+        # similarity search — user baru saja upload & bertanya soal dokumen
+        # ini secara spesifik, jadi tidak perlu (dan tidak boleh) bergantung
+        # pada ambang similarity yang terbukti bisa meleset (lihat README
+        # § "Risiko terkonfirmasi: sitasi palsu"). Ini menghilangkan akar
+        # masalah itu untuk kasus spesifik "tanya soal dokumen yg baru
+        # diunggah" — kita SUDAH TAHU dokumennya, tidak perlu menebak.
+        rows = (
+            db.query(Document)
+            .filter(Document.filename == document_filename)
+            .order_by(Document.id)
+            .limit(DOCUMENT_FOCUS_MAX_CHUNKS)
+            .all()
+        )
+        if rows:
+            context = "\n\n".join(row.content for row in rows)
+            sources = [document_filename]
 
     elif tool_used == "SQL_QUERY":
         sql_prompt = f"Buat query SQL SELECT untuk menjawab: {question}\nHanya gunakan tabel: chat_history, documents"
@@ -162,17 +194,18 @@ async def run_agent(
     question: str,
     db: Session,
     image_path: str = None,
+    document_filename: str = None,
     session_id: str = "default",
 ) -> dict:
     """Versi non-streaming — dipertahankan untuk pengujian langsung/skrip
     diagnostik (lihat README, task.md). Endpoint /chat sekarang memakai
     run_agent_stream()."""
-    tool_used, sources, final_prompt = await _prepare_answer(question, db, image_path)
+    tool_used, sources, final_prompt = await _prepare_answer(question, db, image_path, document_filename)
     answer = await ask_llm(final_prompt, system_prompt=SYSTEM_PROMPT)
     return {"answer": answer, "tool_used": tool_used, "sources": sources}
 
 
-async def run_agent_stream(question: str, db: Session, image_path: str = None):
+async def run_agent_stream(question: str, db: Session, image_path: str = None, document_filename: str = None):
     """
     Versi streaming: yield event dict secara bertahap alih-alih menunggu
     jawaban lengkap jadi.
@@ -183,7 +216,7 @@ async def run_agent_stream(question: str, db: Session, image_path: str = None):
     token demi token setelahnya. Event berikutnya {"type": "token", "text": ...}
     satu per potongan token dari Ollama.
     """
-    tool_used, sources, final_prompt = await _prepare_answer(question, db, image_path)
+    tool_used, sources, final_prompt = await _prepare_answer(question, db, image_path, document_filename)
 
     yield {"type": "meta", "tool_used": tool_used, "sources": sources}
 

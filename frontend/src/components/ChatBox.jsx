@@ -4,13 +4,24 @@ import UploadButton from './UploadButton'
 import { sendMessageStream, getChatHistory } from '../services/api'
 import { Bot, FileText, Image as ImageIcon, Database } from 'lucide-react'
 
+// Prompt bawaan saat user melampirkan file lalu langsung menekan kirim
+// tanpa mengetik apa pun — pola yang sama dipakai ChatGPT/Gemini: lampirkan
+// file, kirim kosong, AI otomatis meringkas/menganalisis.
+const DEFAULT_PROMPT = {
+  image: 'Apa isi teks pada gambar ini?',
+  document: 'Ringkas isi dokumen ini.',
+}
+
 export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSidebar }) {
   const [messages, setMessages]   = useState([])
   const [input, setInput]         = useState('')
   const [loading, setLoading]     = useState(false)
   const [error, setError]         = useState('')
   const [notification, setNotify] = useState('')
-  const [pendingImage, setPendingImage] = useState(null)
+  // Lampiran yang menunggu dikirim bersama pesan berikutnya — gambar (OCR)
+  // ATAU dokumen yang baru diunggah (DOCUMENT_FOCUS, lihat agent.py).
+  // { type: 'image' | 'document', filename, stored_filename }
+  const [pendingAttachment, setPendingAttachment] = useState(null)
   const [historyLoading, setHistoryLoading] = useState(true)
 
   const bottomRef = useRef(null)
@@ -29,7 +40,7 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
     let cancelled = false
     setHistoryLoading(true)
     setError('')
-    setPendingImage(null)
+    setPendingAttachment(null)
     setInput('')
 
     getChatHistory(sessionId)
@@ -56,7 +67,11 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
   }
 
   const handleSend = async () => {
-    const text = input.trim()
+    const attachment = pendingAttachment
+    // Kalau ada lampiran dan input kosong, pakai prompt bawaan (mis. "kirim
+    // langsung" setelah upload tanpa mengetik apa-apa) — bukan diblokir
+    // seperti sebelumnya (submit selalu butuh teks non-kosong).
+    const text = input.trim() || (attachment ? DEFAULT_PROMPT[attachment.type] : '')
     if (!text || loading) return
 
     const userMsg = { role: 'user', message: text, id: Date.now() }
@@ -65,8 +80,9 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
     setLoading(true)
     setError('')
 
-    const imageFilename = pendingImage?.stored_filename ?? null
-    setPendingImage(null)
+    const imageFilename = attachment?.type === 'image' ? attachment.stored_filename : null
+    const documentFilename = attachment?.type === 'document' ? attachment.stored_filename : null
+    setPendingAttachment(null)
 
     // Sampai event "meta" pertama datang (LLM masih memilih tool & menyusun
     // konteks — bisa 1-10 detik tergantung tool), belum ada pesan asisten
@@ -79,7 +95,7 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
     abortControllerRef.current = controller
 
     try {
-      await sendMessageStream(sessionId, text, imageFilename, {
+      await sendMessageStream(sessionId, text, imageFilename, documentFilename, {
         onMeta: (meta) => {
           assistantMsgId = Date.now() + 1
           setMessages((prev) => [
@@ -143,19 +159,17 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
 
   const handleUploadSuccess = (result) => {
     notify(`✅ ${result.message}`)
-    if (result.status === 'uploaded' && result.stored_filename) {
-      setPendingImage(result)
+    // Sama seperti ChatGPT/Gemini: upload TIDAK membuat giliran chat
+    // tersendiri — file jadi lampiran di composer (banner di bawah),
+    // baru "masuk" ke percakapan saat user benar-benar menekan kirim.
+    if (result.stored_filename) {
+      const type = result.status === 'uploaded' ? 'image' : 'document'
+      setPendingAttachment({
+        type,
+        filename: result.filename,
+        stored_filename: result.stored_filename,
+      })
     }
-    setMessages((prev) => [
-      ...prev,
-      {
-        role: 'assistant',
-        message: `📎 **File diterima**: \`${result.filename}\`\n\n${result.message}`,
-        toolUsed: null,
-        sources: [],
-        id: Date.now(),
-      },
-    ])
   }
 
   return (
@@ -296,19 +310,23 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
         </div>
       )}
 
-      {/* ── Gambar Terlampir ────────────────────── */}
-      {pendingImage && (
+      {/* ── Lampiran (gambar/dokumen) ───────────── */}
+      {pendingAttachment && (
         <div
           className="mx-4 sm:mx-8 mb-3 flex items-center justify-between gap-3 px-4 py-3 rounded-2xl text-xs slide-up-fade shadow-lg backdrop-blur-md"
           style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', color: '#93c5fd' }}
         >
           <div className="flex items-center gap-2">
-            <ImageIcon size={16} />
-            <span><code className="bg-blue-900/30 px-1.5 py-0.5 rounded text-blue-200">{pendingImage.filename}</code> siap dianalisis</span>
+            {pendingAttachment.type === 'image' ? <ImageIcon size={16} /> : <FileText size={16} />}
+            <span>
+              <code className="bg-blue-900/30 px-1.5 py-0.5 rounded text-blue-200">{pendingAttachment.filename}</code>{' '}
+              siap dianalisis — ketik pertanyaan atau langsung tekan kirim untuk{' '}
+              {pendingAttachment.type === 'image' ? 'baca teksnya' : 'ringkasan otomatis'}
+            </span>
           </div>
           <button
-            onClick={() => setPendingImage(null)}
-            className="w-6 h-6 rounded-full flex items-center justify-center bg-blue-500/20 hover:bg-blue-500/40 transition-colors"
+            onClick={() => setPendingAttachment(null)}
+            className="w-6 h-6 rounded-full flex items-center justify-center bg-blue-500/20 hover:bg-blue-500/40 transition-colors flex-shrink-0"
             title="Batalkan lampiran"
           >
             ✕
@@ -350,7 +368,7 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
           <button
             id="send-btn"
             onClick={loading ? handleStop : handleSend}
-            disabled={!loading && !input.trim()}
+            disabled={!loading && !input.trim() && !pendingAttachment}
             className="w-12 h-12 mb-0.5 mr-0.5 rounded-[1.5rem] flex items-center justify-center transition-all duration-200 hover:brightness-110 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
             style={{ background: 'linear-gradient(135deg, var(--accent-blue), var(--accent-purple))' }}
             title={loading ? 'Hentikan jawaban' : 'Kirim'}
