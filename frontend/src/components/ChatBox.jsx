@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
 import UploadButton from './UploadButton'
 import { sendMessageStream, getChatHistory } from '../services/api'
-import { Bot, FileText, Image as ImageIcon, Database } from 'lucide-react'
+import { Bot, FileText, Image as ImageIcon, Database, X, CheckCircle, AlertTriangle } from 'lucide-react'
 
 // Prompt bawaan saat user melampirkan file lalu langsung menekan kirim
 // tanpa mengetik apa pun — pola yang sama dipakai ChatGPT/Gemini: lampirkan
@@ -107,8 +107,11 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
     setLoading(true)
     setError('')
 
-    const imageFilename = attachment?.type === 'image' ? attachment.stored_filename : null
-    const documentFilename = attachment?.type === 'document' ? attachment.stored_filename : null
+    // Semua lampiran — gambar sekalian — sudah masuk knowledge base saat
+    // diunggah, jadi cukup dirujuk lewat document_filename. Gambar TIDAK lagi
+    // dikirim lewat image_filename: jalur itu meng-OCR ulang tiap pertanyaan
+    // (5-30 detik), padahal teksnya sudah tersimpan sejak upload.
+    const documentFilename = attachment?.stored_filename ?? null
     setPendingAttachment(null)
 
     // Sampai event "meta" pertama datang (LLM masih memilih tool & menyusun
@@ -122,7 +125,7 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
     abortControllerRef.current = controller
 
     try {
-      await sendMessageStream(sessionId, text, imageFilename, documentFilename, {
+      await sendMessageStream(sessionId, text, null, documentFilename, {
         onMeta: (meta) => {
           assistantMsgId = Date.now() + 1
           setMessages((prev) => [
@@ -185,7 +188,14 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
   }
 
   const handleUploadSuccess = (result) => {
-    notify(`✅ ${result.message}`)
+    // Hanya status "done" yang berarti teksnya benar-benar masuk knowledge
+    // base. "warning" (tidak ada teks terbaca — mis. gambar buram) dan
+    // "failed" (berkas rusak, Ollama mati di tengah jalan) ditampilkan merah
+    // seperti error; dulu keduanya tampil hijau bertanda centang sehingga
+    // pengguna mengira dokumennya sudah masuk padahal kosong.
+    // stored_filename juga kosong untuk kedua status itu, jadi tidak ada
+    // lampiran yang dibuat.
+    notify(result.message, result.status !== 'done')
     // Lampiran sebelumnya dibatalkan tanpa pernah terkirim (mis. ganti file
     // sebelum menekan kirim) — blob URL-nya tidak dipakai lagi, lepaskan.
     if (pendingAttachment?.previewUrl) URL.revokeObjectURL(pendingAttachment.previewUrl)
@@ -193,7 +203,11 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
     // tersendiri — file jadi lampiran di composer (banner di bawah),
     // baru "masuk" ke percakapan saat user benar-benar menekan kirim.
     if (result.stored_filename) {
-      const type = result.status === 'uploaded' ? 'image' : 'document'
+      // Ditentukan dari ada/tidaknya pratinjau (hanya gambar yang punya), bukan
+      // dari status upload: sejak gambar ikut diindeks ke knowledge base,
+      // backend membalas "processed" untuk gambar maupun dokumen. Tipe ini
+      // cuma menentukan tampilan (ikon, prompt bawaan), bukan cara merujuknya.
+      const type = result.previewUrl ? 'image' : 'document'
       setPendingAttachment({
         type,
         filename: result.filename,
@@ -231,9 +245,9 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
             <Bot size={22} className="text-white drop-shadow-md" />
           </div>
           <div>
-            <h1 className="font-bold text-base gradient-text tracking-wide">Agentic RAG</h1>
+            <h1 className="font-bold text-base gradient-text tracking-wide">Nanang</h1>
             <p className="text-xs font-medium opacity-80" style={{ color: 'var(--text-muted)' }}>
-              Local AI &middot; llama3.2:1b
+              Asisten AI Diskominfo HSS
             </p>
           </div>
         </div>
@@ -265,9 +279,9 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
               <Bot size={32} className="text-white drop-shadow-md" />
             </div>
             <div>
-              <p className="font-bold text-xl mb-2 tracking-tight" style={{ color: 'var(--text-primary)' }}>Siap Membantu Anda</p>
+              <p className="font-bold text-xl mb-2 tracking-tight" style={{ color: 'var(--text-primary)' }}>Halo, saya Nanang</p>
               <p className="text-sm max-w-md mx-auto" style={{ color: 'var(--text-muted)' }}>
-                Ajukan pertanyaan, minta ringkasan, atau upload dokumen/gambar untuk dianalisis oleh AI.
+                Ajukan pertanyaan, minta ringkasan, atau unggah dokumen/gambar untuk saya analisis.
               </p>
             </div>
             <div className="flex flex-wrap gap-3 justify-center mt-4">
@@ -331,7 +345,7 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
       {/* ── Notifications ───────────────────────── */}
       {(error || notification) && (
         <div
-          className="mx-4 sm:mx-8 mb-3 px-5 py-3 rounded-2xl text-sm font-medium slide-up-fade shadow-lg"
+          className="mx-4 sm:mx-8 mb-3 px-5 py-3 rounded-2xl text-sm font-medium slide-up-fade shadow-lg flex items-center gap-2"
           style={{
             background: error ? 'rgba(239,68,68,0.15)' : 'rgba(16,185,129,0.15)',
             border: `1px solid ${error ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)'}`,
@@ -339,7 +353,8 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
             backdropFilter: 'blur(12px)'
           }}
         >
-          {error || notification}
+          {error ? <AlertTriangle size={18} /> : <CheckCircle size={18} />}
+          <span>{error || notification}</span>
         </div>
       )}
 
@@ -380,7 +395,7 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
             className="w-6 h-6 rounded-full flex items-center justify-center bg-blue-500/20 hover:bg-blue-500/40 transition-colors flex-shrink-0"
             title="Batalkan lampiran"
           >
-            ✕
+            <X size={12} strokeWidth={3} />
           </button>
         </div>
       )}

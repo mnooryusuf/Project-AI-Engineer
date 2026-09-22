@@ -135,12 +135,21 @@ export const deleteChatSession = async (sessionId) => {
 // browser sama sekali. Angka % di titik itu cuma menampilkan "100%" lalu
 // diam selama proses sebenarnya berjalan — terlihat macet padahal jujur
 // tidak ada cara mengukurnya presisi dari sisi client (lihat UploadButton.jsx).
+// Mengembalikan { job_id, filename, status: "processing", message } dengan
+// CEPAT — server hanya memvalidasi dan menyimpan berkasnya. Ekstraksi teks,
+// OCR, dan embedding berjalan di latar belakang; pantau dengan
+// getUploadJob(job_id) sampai statusnya bukan "processing" lagi.
 export const uploadFile = async (file) => {
   const form = new FormData()
   form.append('file', file)
   const res = await api.post('/upload', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
+  return res.data
+}
+
+export const getUploadJob = async (jobId) => {
+  const res = await api.get(`/upload/jobs/${encodeURIComponent(jobId)}`)
   return res.data
 }
 

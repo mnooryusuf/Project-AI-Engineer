@@ -94,11 +94,26 @@ class DocumentListItem(BaseModel):
     uploaded_at: datetime
 
 class UploadResponse(BaseModel):
+    """
+    Balasan SEGERA setelah berkas diterima — pemrosesan (ekstraksi teks, OCR,
+    embedding) berjalan di latar belakang, jadi status di sini hampir selalu
+    "processing". Hasil akhirnya diambil lewat GET /upload/jobs/{job_id}.
+    """
+    job_id: str
     filename: str
     status: str
     message: str
-    # Nama file tersimpan (bukan path lengkap) — kirim balik lewat
-    # ChatRequest.image_filename untuk menanyakan isi gambar ini.
+
+
+class UploadJobStatus(BaseModel):
+    """Status pemrosesan satu unggahan."""
+    job_id: str
+    filename: str
+    status: str  # processing | done | warning | failed
+    message: str
+    chunks_saved: int = 0
+    # Baru terisi kalau status "done" — dipakai frontend sebagai rujukan
+    # lampiran lewat ChatRequest.document_filename.
     stored_filename: Optional[str] = None
 
 

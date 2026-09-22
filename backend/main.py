@@ -1,7 +1,8 @@
 """
 main.py — FastAPI Entry Point
-Agentic RAG Local AI System
+Nanang — Asisten AI Diskominfo SP TIK Kabupaten Hulu Sungai Selatan
 """
+import asyncio
 import json
 import os
 import re
@@ -10,7 +11,7 @@ import aiofiles
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, status
+from fastapi import BackgroundTasks, FastAPI, Depends, HTTPException, UploadFile, File, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -21,16 +22,17 @@ import bcrypt
 
 from config import get_settings
 from database import get_db, engine, SessionLocal
-from models import Base, ChatHistory, Document, User
+from models import Base, ChatHistory, Document, UploadJob, User
 from schemas import (
-    ChatRequest, UploadResponse, HealthResponse,
+    ChatRequest, UploadResponse, UploadJobStatus, HealthResponse,
     UserCreate, UserResponse, Token, TokenData,
     ChatHistoryItem, ChatSessionItem, DocumentListItem,
 )
 from agent import run_agent_stream
-from services.document_service import process_and_store_document
+from services.document_service import process_and_store_document, store_text_as_document
 from services.llm_service import check_ollama_status
 from services.file_validation import verify_file_signature
+from tools.ocr_tool import extract_text_from_image
 
 # ── Init ────────────────────────────────────────────────
 settings = get_settings()
@@ -49,6 +51,20 @@ with engine.begin() as conn:
             ADD COLUMN IF NOT EXISTS attachment_filename VARCHAR(255)
     """))
 
+# Pekerjaan yang masih "processing" saat proses ini mulai berarti backend mati
+# di tengah pemrosesan sebelumnya — BackgroundTasks hidup di dalam proses, jadi
+# pekerjaannya ikut hilang dan tidak akan pernah selesai sendiri. Tanpa ini,
+# frontend memantau status yang tidak akan pernah berubah selamanya. Ditandai
+# gagal supaya pengguna tahu harus mengunggah ulang.
+with engine.begin() as conn:
+    conn.execute(text("""
+        UPDATE upload_jobs
+        SET status = 'failed',
+            message = 'Pemrosesan terhenti karena server dimulai ulang. Silakan unggah ulang berkasnya.',
+            finished_at = NOW()
+        WHERE status = 'processing'
+    """))
+
 # Nama file gambar disimpan di disk dengan prefix "{uuid_hex}_" (lihat
 # /upload) — untuk ditampilkan di riwayat chat, prefix ini dibuang supaya
 # yang terlihat nama file aslinya, bukan nama internal storage.
@@ -59,8 +75,8 @@ def _display_filename(stored_name: str) -> str:
     return _UUID_PREFIX_RE.sub("", stored_name, count=1)
 
 app = FastAPI(
-    title="Agentic RAG API",
-    description="Local AI System dengan RAG, OCR, dan SQL Tool",
+    title="Nanang API",
+    description="Asisten AI lokal Diskominfo SP TIK HSS — RAG dokumen, OCR gambar, dan query database.",
     version="1.0.0",
 )
 
@@ -75,7 +91,11 @@ app.add_middleware(
 # ── Auth Setup ───────────────────────────────────────────
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
-ALLOWED_EXTENSIONS = {".pdf", ".txt", ".png", ".jpg", ".jpeg", ".webp"}
+ALLOWED_EXTENSIONS = {".pdf", ".txt", ".docx", ".xlsx", ".png", ".jpg", ".jpeg", ".webp"}
+# Ekstensi yang teksnya diambil lewat extract_text_from_file(); sisanya
+# (gambar) diambil lewat OCR. Keduanya sama-sama berakhir di knowledge base —
+# pembedaan di sini hanya soal CARA teksnya diperoleh, bukan apakah diindeks.
+DOCUMENT_EXTENSIONS = {".pdf", ".txt", ".docx", ".xlsx"}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 # bcrypt hanya memproses 72 byte pertama; password yang lebih panjang dipotong
@@ -370,15 +390,87 @@ def delete_chat_session(
 
 # ── Upload Endpoints ─────────────────────────────────────
 
+# Hanya satu berkas diproses pada satu waktu. OCR memuat model EasyOCR dan
+# merender halaman PDF ke bitmap beresolusi penuh — dua unggahan bersamaan di
+# mesin 8GB (yang sudah menjalankan Ollama, Postgres, dan Vite) berisiko
+# kehabisan memori. Antre lebih baik daripada keduanya gagal.
+_upload_semaphore = asyncio.Semaphore(1)
+
+
+async def _process_upload_job(job_id: str, file_path: str, original_filename: str, ext: str) -> None:
+    """
+    Kerjakan ekstraksi + embedding satu unggahan di latar belakang.
+
+    Membuka sesi database sendiri: sesi dari Depends(get_db) milik permintaan
+    /upload sudah ditutup Starlette saat fungsi ini berjalan (pola yang sama
+    dipakai generator streaming di /chat).
+    """
+    async with _upload_semaphore:
+        db = SessionLocal()
+        try:
+            if ext in DOCUMENT_EXTENSIONS:
+                chunks = await process_and_store_document(file_path, original_filename, db)
+                gagal_pesan = (
+                    f"Tidak ada teks yang bisa dibaca dari {original_filename}. "
+                    "Dokumen TIDAK masuk knowledge base."
+                )
+                sukses_pesan = f"Dokumen diproses: {chunks} chunk disimpan ke knowledge base."
+            else:
+                hasil = await extract_text_from_image(file_path)
+                teks = hasil["text"] if hasil.get("success") else ""
+                chunks = await store_text_as_document(
+                    teks, original_filename, db, {"source": "ocr"}
+                ) if teks.strip() else 0
+                gagal_pesan = (
+                    f"Tidak ada teks yang terbaca pada {original_filename}. "
+                    "Gambar TIDAK masuk knowledge base — pastikan tulisannya jelas dan tidak terpotong."
+                )
+                sukses_pesan = f"Gambar dibaca lewat OCR: {chunks} chunk disimpan ke knowledge base."
+
+            # Nol chunk TIDAK boleh dilaporkan sebagai sukses — pengguna akan
+            # mengira dokumennya masuk knowledge base padahal kosong, lalu
+            # pertanyaan berikutnya dijawab mengarang. stored_filename
+            # dibiarkan kosong supaya tidak ada lampiran yang menunjuk ke
+            # dokumen tanpa isi.
+            job_status = "done" if chunks > 0 else "warning"
+            _finish_job(
+                db, job_id, job_status,
+                sukses_pesan if chunks > 0 else gagal_pesan,
+                chunks,
+                original_filename if chunks > 0 else None,
+            )
+        except Exception as e:
+            # Kegagalan tak terduga (berkas rusak, Ollama mati di tengah jalan)
+            # harus tetap sampai ke pengguna — tanpa ini pekerjaan menggantung
+            # di status "processing" selamanya.
+            _finish_job(db, job_id, "failed", f"Gagal memproses {original_filename}: {e}", 0, None)
+        finally:
+            db.close()
+
+
+def _finish_job(db: Session, job_id: str, status: str, message: str,
+                chunks: int, stored_filename: str | None) -> None:
+    job = db.query(UploadJob).filter(UploadJob.id == job_id).first()
+    if job is None:
+        return
+    job.status = status
+    job.message = message
+    job.chunks_saved = chunks
+    job.stored_filename = stored_filename
+    job.finished_at = datetime.now(timezone.utc)
+    db.commit()
+
+
 @app.post("/upload", response_model=UploadResponse, tags=["Upload"])
 async def upload_file(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     # read_only sengaja tidak termasuk: menambah dokumen mengubah knowledge
     # base bersama, bukan operasi "baca saja".
     current_user: User = Depends(require_roles("admin", "user")),
     db: Session = Depends(get_db),
 ):
-    """Upload dokumen (PDF/TXT) atau gambar untuk OCR."""
+    """Upload dokumen (PDF/TXT/DOCX/XLSX) atau gambar untuk OCR."""
     # `file.filename` datang mentah dari client (header Content-Disposition
     # multipart) — bisa diisi string apa pun oleh client non-browser, bukan
     # cuma nama file polos. TERBUKTI saat diuji: filename seperti
@@ -416,26 +508,56 @@ async def upload_file(
     async with aiofiles.open(file_path, "wb") as f:
         await f.write(content)
 
-    # Proses dokumen ke RAG (hanya untuk PDF/TXT)
-    if ext in {".pdf", ".txt"}:
-        chunks_saved = await process_and_store_document(file_path, original_filename, db)
-        return UploadResponse(
-            filename=original_filename,
-            status="processed",
-            message=f"Dokumen diproses: {chunks_saved} chunk disimpan ke knowledge base.",
-            # Sama seperti gambar: dikirim balik lewat ChatRequest.document_filename
-            # supaya pertanyaan berikutnya langsung fokus ke dokumen ini
-            # (bukan path lengkap di disk — di sini nilainya adalah kolom
-            # `filename` di tabel documents, dipakai untuk query langsung).
-            stored_filename=original_filename,
-        )
-
-    # Gambar disimpan saja, OCR dilakukan saat chat — lihat ChatRequest.image_filename
-    return UploadResponse(
+    # Pemrosesan (ekstraksi/OCR/embedding) dipindah ke latar belakang. OCR
+    # berjalan ~33 detik per halaman, jadi kalau dikerjakan di dalam permintaan
+    # ini pengguna menatap spinner sampai beberapa menit dan koneksi berisiko
+    # putus di tengah jalan. Di sini berkas hanya divalidasi dan disimpan,
+    # lalu balasan langsung dikirim; kemajuannya dipantau lewat
+    # GET /upload/jobs/{job_id}.
+    job_id = str(uuid.uuid4())
+    db.add(UploadJob(
+        id=job_id,
+        user_id=current_user.id,
         filename=original_filename,
-        status="uploaded",
-        message="Gambar berhasil diunggah. Tanyakan sesuatu tentang gambar ini di chat.",
-        stored_filename=safe_name,
+        status="processing",
+        message="Berkas diterima, sedang diproses.",
+    ))
+    db.commit()
+
+    background_tasks.add_task(_process_upload_job, job_id, file_path, original_filename, ext)
+
+    return UploadResponse(
+        job_id=job_id,
+        filename=original_filename,
+        status="processing",
+        message="Berkas diterima, sedang diproses.",
+    )
+
+
+@app.get("/upload/jobs/{job_id}", response_model=UploadJobStatus, tags=["Upload"])
+def get_upload_job(
+    job_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Status pemrosesan satu unggahan. Difilter dengan user_id supaya pengguna
+    tidak bisa mengintip status unggahan orang lain dengan menebak job_id.
+    """
+    job = (
+        db.query(UploadJob)
+        .filter(UploadJob.id == job_id, UploadJob.user_id == current_user.id)
+        .first()
+    )
+    if job is None:
+        raise HTTPException(status_code=404, detail="Proses unggahan tidak ditemukan.")
+    return UploadJobStatus(
+        job_id=job.id,
+        filename=job.filename,
+        status=job.status,
+        message=job.message or "",
+        chunks_saved=job.chunks_saved or 0,
+        stored_filename=job.stored_filename,
     )
 
 

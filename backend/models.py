@@ -1,7 +1,7 @@
 """
 models.py — SQLAlchemy ORM Models
 """
-from sqlalchemy import Column, BigInteger, String, Text, Boolean, DateTime, JSON
+from sqlalchemy import Column, BigInteger, Integer, String, Text, Boolean, DateTime, JSON
 from sqlalchemy.sql import func
 from pgvector.sqlalchemy import Vector
 from database import Base
@@ -34,12 +34,39 @@ class Document(Base):
     id = Column(BigInteger, primary_key=True, index=True)
     filename = Column(String(255), nullable=False, index=True)
     content = Column(Text, nullable=False)
-    # all-minilm embedding dimension = 384
-    embedding = Column(Vector(384))
+    # paraphrase-multilingual embedding dimension = 768.
+    # Harus cocok dengan ollama_embedding_model di config.py — mengganti model
+    # embedding berarti mengganti angka ini DAN meng-embed ulang seluruh isi
+    # tabel (vektor lama tidak kompatibel, bukan sekadar beda panjang).
+    embedding = Column(Vector(768))
     # "metadata" adalah nama yang dipakai Declarative API, jadi atribut
     # Python-nya diberi nama lain sambil tetap memetakan ke kolom "metadata".
     doc_metadata = Column("metadata", JSON)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class UploadJob(Base):
+    """
+    Status pemrosesan satu berkas yang diunggah.
+
+    Disimpan di database, bukan di memori proses: OCR bisa berjalan beberapa
+    menit, dan kalau backend di-restart di tengah jalan status yang hanya ada
+    di memori akan hilang tanpa jejak — pengguna melihat "sedang diproses"
+    selamanya tanpa cara mengetahui apa yang terjadi.
+    """
+    __tablename__ = "upload_jobs"
+
+    id = Column(String(36), primary_key=True, index=True)  # uuid4
+    user_id = Column(BigInteger, nullable=True, index=True)
+    filename = Column(String(255), nullable=False)
+    # Nama rujukan untuk lampiran chat setelah selesai (kolom `filename` di
+    # tabel documents). Kosong selama pemrosesan belum berhasil.
+    stored_filename = Column(String(255), nullable=True)
+    status = Column(String(20), nullable=False)  # processing | done | warning | failed
+    chunks_saved = Column(Integer, default=0)
+    message = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    finished_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class User(Base):

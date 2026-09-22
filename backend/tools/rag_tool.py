@@ -7,13 +7,27 @@ from sqlalchemy import text
 from services.embedding_service import get_embedding
 
 
-# Ambang minimum relevansi.
-# all-minilm dilatih untuk bahasa Inggris, sehingga teks Indonesia menempati
-# pita similarity yang sempit. Hasil pengukuran pada knowledge base contoh:
-# pertanyaan relevan 0.63-0.69, pertanyaan di luar topik 0.27-0.51. Ambang 0.55
-# memisahkan keduanya; nilai yang lebih rendah membuat dokumen acak ikut lolos
-# dan dikutip sebagai sumber.
-SIMILARITY_THRESHOLD = 0.55
+# Ambang minimum relevansi — TERIKAT pada model embedding (config.py) DAN
+# pada CHUNK_SIZE (document_service.py). Keduanya menggeser skor, jadi angka
+# ini harus diukur ulang setiap kali salah satunya berubah.
+#
+# Pengukuran berlaku: paraphrase-multilingual, chunk 300 karakter, 80 chunk:
+#   pertanyaan relevan     0.547 - 0.832
+#   pertanyaan statistik   0.382 - 0.432   <- harus ditolak agar jatuh ke SQL_QUERY
+#   pertanyaan luar topik  0.179 - 0.337
+# 0.49 berada di tengah celah 0.432-0.547.
+#
+# Pertanyaan statistik ("berapa jumlah chat hari ini") sengaja diperhitungkan
+# sebagai kelompok yang HARUS ditolak: sejak _prepare_answer menjalankan RAG
+# lebih dulu untuk semua pertanyaan, ambang inilah satu-satunya yang menjaga
+# pertanyaan statistik tetap sampai ke SQL_QUERY. Pada ambang 0.37 hal itu
+# TERBUKTI gagal — "Berapa jumlah chat hari ini?" (0.432) tertangkap RAG dan
+# dijawab "146.000.000" dari dokumen daftar harga barang.
+#
+# Riwayat: angka 0.55 untuk all-minilm sudah tidak berlaku. Pada model itu
+# pita relevan (0.460-0.715) dan luar topik (0.487-0.599) saling tumpang
+# tindih — tidak ada ambang yang memisahkan sama sekali.
+SIMILARITY_THRESHOLD = 0.49
 
 
 async def rag_search(query: str, db: Session, top_k: int = 3) -> dict:

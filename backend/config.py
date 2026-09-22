@@ -30,7 +30,16 @@ class Settings(BaseSettings):
     # Ollama
     ollama_base_url: str = "http://localhost:11434"
     ollama_llm_model: str = "llama3.2:1b"
-    ollama_embedding_model: str = "all-minilm"
+    # paraphrase-multilingual (768 dimensi, ~560MB). Menggantikan all-minilm
+    # yang hanya dilatih bahasa Inggris: pada knowledge base berbahasa
+    # Indonesia, all-minilm memberi skor pertanyaan DI LUAR topik (0.487-0.599)
+    # yang tumpang tindih dengan pertanyaan relevan (0.460-0.715) — tidak ada
+    # ambang yang bisa memisahkannya, dan "Apa ibu kota Jepang?" (0.599) dinilai
+    # lebih relevan terhadap arsip surat dinas daripada pertanyaan yang
+    # jawabannya benar-benar ada di dokumen (0.498). Dengan model ini pita
+    # terpisah bersih: relevan 0.433-0.717, di luar topik 0.203-0.302.
+    # Dimensi 768 harus cocok dengan Vector() di models.py.
+    ollama_embedding_model: str = "paraphrase-multilingual"
 
     # Storage
     upload_dir: str = "./storage/uploads"

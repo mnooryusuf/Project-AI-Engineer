@@ -1,7 +1,7 @@
 // src/components/MessageBubble.jsx
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
-import { Bot, FileText, Image, Database, MessageSquare, Paperclip } from 'lucide-react'
+import { Bot, FileText, Image, Database, MessageSquare, Paperclip, Check } from 'lucide-react'
 
 const TOOL_LABELS = {
   rag_search:      { label: 'RAG Dokumen', icon: <FileText size={14} />, color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
@@ -34,7 +34,7 @@ function CodeBlock({ children, ...props }) {
         className="absolute top-2 right-2 text-[11px] font-medium px-2 py-1 rounded-md opacity-0 group-hover/code:opacity-100 transition-opacity duration-150"
         style={{ background: 'var(--overlay-3)', color: 'var(--text-muted)' }}
       >
-        {copied ? '✓ Disalin' : 'Salin'}
+        {copied ? <><Check size={12} className="inline mr-1" /> Disalin</> : 'Salin'}
       </button>
       <pre {...props}>{children}</pre>
     </div>
@@ -57,7 +57,7 @@ function CopyButton({ text }) {
       title="Salin jawaban"
     >
       {copied ? (
-        <>✓ Disalin</>
+        <><Check size={14} className="inline mr-1" /> Disalin</>
       ) : (
         <>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

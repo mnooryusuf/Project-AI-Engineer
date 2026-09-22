@@ -1,6 +1,7 @@
 // src/components/DocumentsPanel.jsx — Daftar dokumen persisten di
 // knowledge base (bukan cuma toast notifikasi sesaat saat upload).
 import { useEffect, useState } from 'react'
+import { FileText, X, Trash2 } from 'lucide-react'
 import { getDocuments, deleteDocument } from '../services/api'
 
 function formatDate(iso) {
@@ -53,14 +54,14 @@ export default function DocumentsPanel({ isOpen, onClose }) {
           style={{ borderBottom: '1px solid var(--glass-border)' }}
         >
           <h2 className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>
-            📄 Dokumen di Knowledge Base
+            <FileText size={20} className="mr-2 inline-block opacity-80" /> Dokumen di Knowledge Base
           </h2>
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-[var(--overlay-2)] transition-colors"
             style={{ color: 'var(--text-muted)' }}
           >
-            ✕
+            <X size={20} />
           </button>
         </div>
 
@@ -124,7 +125,7 @@ export default function DocumentsPanel({ isOpen, onClose }) {
                       style={{ color: 'var(--text-muted)' }}
                       title="Hapus dari knowledge base"
                     >
-                      🗑
+                      <Trash2 size={16} />
                     </button>
                   )}
                 </li>

@@ -1,0 +1,67 @@
+KATALOG LAYANAN TEKNOLOGI INFORMASI
+DISKOMINFO SP TIK KABUPATEN HULU SUNGAI SELATAN
+
+Dokumen ini menjelaskan layanan teknologi informasi yang disediakan Diskominfo SP TIK bagi
+perangkat daerah di lingkungan Pemerintah Kabupaten Hulu Sungai Selatan.
+
+1. LAYANAN NAMA DOMAIN DAN SUBDOMAIN
+Uraian: pembuatan, perubahan, dan penghapusan subdomain di bawah domain resmi pemerintah
+daerah untuk situs web maupun aplikasi perangkat daerah.
+Pemohon: perangkat daerah melalui surat permohonan resmi dari kepala perangkat daerah.
+Persyaratan: surat permohonan, nama subdomain yang diusulkan, nama dan kontak pengelola
+teknis, serta keterangan aplikasi atau situs yang akan digunakan.
+Waktu layanan: «isi standar waktu layanan, misalnya 3 hari kerja»
+
+2. LAYANAN SUREL RESMI PEMERINTAH DAERAH
+Uraian: pembuatan dan pengelolaan akun surel dinas untuk pejabat, pegawai, dan unit kerja.
+Pemohon: perangkat daerah melalui surat permohonan resmi.
+Persyaratan: surat permohonan, daftar nama pegawai, NIP, jabatan, dan nomor kontak aktif.
+Waktu layanan: «isi standar waktu layanan»
+
+3. LAYANAN HOSTING DAN INFRASTRUKTUR SERVER
+Uraian: penempatan aplikasi perangkat daerah pada infrastruktur pusat data pemerintah daerah,
+termasuk penyediaan sumber daya server virtual dan basis data.
+Pemohon: perangkat daerah melalui surat permohonan resmi.
+Persyaratan: surat permohonan, dokumen teknis aplikasi, kebutuhan sumber daya, dan penunjukan
+penanggung jawab aplikasi.
+Waktu layanan: «isi standar waktu layanan»
+
+4. LAYANAN JARINGAN DAN KONEKTIVITAS
+Uraian: penyediaan dan pemeliharaan koneksi jaringan antar perangkat daerah, termasuk jaringan
+serat optik dan titik akses nirkabel di lingkungan kantor pemerintah daerah.
+Pemohon: perangkat daerah melalui surat permohonan resmi.
+Persyaratan: surat permohonan, denah lokasi, dan perkiraan kebutuhan kapasitas.
+Waktu layanan: menyesuaikan hasil survei lokasi.
+
+5. LAYANAN PENDAMPINGAN SPBE
+Uraian: pendampingan penerapan Sistem Pemerintahan Berbasis Elektronik, termasuk penyusunan
+dokumen arsitektur, penilaian mandiri indeks SPBE, dan integrasi aplikasi.
+Pemohon: perangkat daerah.
+Persyaratan: surat permohonan atau nota dinas, serta penunjukan tim teknis perangkat daerah.
+
+6. LAYANAN PERSANDIAN DAN KEAMANAN INFORMASI
+Uraian: pengamanan informasi milik pemerintah daerah, termasuk pengelolaan sertifikat
+elektronik, tanda tangan elektronik, dan pemeriksaan keamanan sistem elektronik.
+Pemohon: perangkat daerah melalui surat permohonan resmi.
+Persyaratan: surat permohonan dan data pejabat penanda tangan.
+
+7. LAYANAN VIDEO CONFERENCE DAN MEDIA CENTER
+Uraian: penggunaan ruang Media Center dan fasilitas konferensi video untuk kegiatan resmi
+pemerintah daerah.
+Pemohon: perangkat daerah melalui surat permohonan peminjaman tempat.
+Persyaratan: surat permohonan yang memuat nama kegiatan, tanggal, jam, jumlah peserta, dan
+penanggung jawab kegiatan.
+Waktu pengajuan: «isi tenggat pengajuan sebelum hari pelaksanaan»
+
+8. LAYANAN STATISTIK SEKTORAL
+Uraian: pembinaan dan pendampingan pengumpulan serta penyajian data statistik sektoral
+perangkat daerah, termasuk pengelolaan portal data daerah.
+Pemohon: perangkat daerah.
+
+KETENTUAN UMUM
+Seluruh permohonan layanan diajukan secara resmi melalui surat dari kepala perangkat daerah
+yang ditujukan kepada Kepala Diskominfo SP TIK Kabupaten Hulu Sungai Selatan. Permohonan yang
+tidak memenuhi persyaratan akan dikembalikan disertai keterangan kekurangannya.
+
+CATATAN PENGGUNAAN DOKUMEN
+Bagian bertanda «...» belum diisi dan tidak boleh dijawab oleh asisten sebagai fakta.

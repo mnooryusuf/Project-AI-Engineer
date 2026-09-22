@@ -53,9 +53,12 @@ function LoginPage({ onLogin }) {
           >
             <Bot size={44} className="text-white drop-shadow-md" />
           </div>
-          <h1 className="text-3xl font-bold gradient-text tracking-tight mb-2">Agentic RAG</h1>
+          <h1 className="text-3xl font-bold gradient-text tracking-tight mb-1.5">Nanang</h1>
+          <p className="text-[11px] italic leading-snug mb-2 px-4" style={{ color: 'var(--text-muted)', opacity: 0.7 }}>
+            Naskah, Arsip, dan Navigasi Analitik nan Gesit
+          </p>
           <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
-            Premium Local AI Assistant
+            Asisten AI Diskominfo SP TIK HSS
           </p>
         </div>
 
@@ -164,7 +167,7 @@ function LoginPage({ onLogin }) {
         </div>
 
         <p className="text-center text-xs mt-6 font-medium tracking-wide" style={{ color: 'var(--text-muted)' }}>
-          Agentic RAG &middot; Local AI &middot; Powered by Ollama
+          Nanang &middot; AI Lokal &middot; Diskominfo SP TIK HSS
         </p>
       </div>
     </div>

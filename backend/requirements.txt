@@ -20,7 +20,9 @@ easyocr==1.7.2
 
 # Document Processing
 pypdf==5.0.1
+pypdfium2==5.13.0  # render halaman PDF -> gambar, untuk OCR PDF hasil pindaian
 python-docx==1.2.0
+openpyxl==3.1.5
 python-multipart==0.0.12
 aiofiles==24.1.0
 

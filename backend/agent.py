@@ -4,6 +4,7 @@ LLM memilih tool yang sesuai berdasarkan pertanyaan user.
 """
 import json
 import re
+from pathlib import Path
 from sqlalchemy.orm import Session
 from models import Document
 from services.llm_service import ask_llm, stream_llm
@@ -21,9 +22,22 @@ from tools.sql_tool import run_sql_query
 # dijangkau lewat pertanyaan lanjutan.
 DOCUMENT_FOCUS_MAX_CHUNKS = 6
 
-SYSTEM_PROMPT = """Kamu adalah AI Assistant yang berjalan secara lokal.
+# Ekstensi yang isinya berasal dari OCR, bukan teks asli dokumen — dipakai
+# hanya untuk menentukan badge yang ditampilkan ke pengguna.
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
+
+# Nama diletakkan di baris pertama dan diulang sebagai aturan tersendiri.
+# Sudah diuji: saat identitas ditulis sebagai kalimat mengalir ("Namamu Nanang,
+# asisten AI milik Dinas ..."), llama3.2:1b konsisten MENJATUHKAN namanya dan
+# hanya menyebut nama dinas. Model sekecil ini mengikuti instruksi yang pendek,
+# di depan, dan berdiri sendiri — bukan yang terselip di tengah kalimat.
+SYSTEM_PROMPT = """Nama kamu adalah Nanang.
+
+Kamu adalah asisten AI Dinas Komunikasi, Informatika, Statistik dan Persandian
+Kabupaten Hulu Sungai Selatan, berjalan secara lokal di server dinas.
 
 Aturan menjawab:
+- Saat memperkenalkan diri, SELALU sebut nama kamu: Nanang.
 - Jawab langsung ke inti pertanyaan, singkat dan jelas.
 - Jangan menjelaskan proses berpikirmu, dan jangan menyebut nama tool apa pun.
 - Jangan mengarang fakta yang tidak ada dalam konteks yang diberikan.
@@ -34,6 +48,12 @@ Aturan menjawab:
 async def _determine_tool(question: str) -> str:
     """Minta LLM menentukan tool yang paling tepat.
 
+    RUANG LINGKUP: fungsi ini TIDAK lagi menentukan apakah RAG dipakai —
+    _prepare_answer selalu menjalankan rag_search lebih dulu dan baru
+    memanggil fungsi ini kalau retrieval mengembalikan nol hasil di atas
+    ambang similarity. Jadi keputusan yang tersisa di sini praktis cuma
+    "pertanyaan statistik (SQL_QUERY) atau bukan".
+
     CATATAN (sudah diuji, jangan diubah tanpa menguji ulang dengan data):
     llama3.2:1b tidak bisa diandalkan untuk routing SQL_QUERY — dengan
     panduan di bawah ini, pertanyaan statistik SELALU salah dialihkan ke
@@ -41,12 +61,10 @@ async def _determine_tool(question: str) -> str:
     disebut lebih dulu + kata kunci lebih tegas) yang menaikkan akurasi SQL
     jadi 2/3 — TAPI itu membuat 2 dari 6 pertanyaan RAG yang sebelumnya
     selalu benar (mis. "Jam berapa jam kerja dimulai?") ikut salah
-    dialihkan ke SQL_QUERY, lalu berakhir sebagai jawaban DIRECT_ANSWER yang
-    dikarang sepenuhnya — padahal RAG_SEARCH sebenarnya punya jawaban yang
-    benar. RAG_SEARCH adalah fitur inti aplikasi ini; tidak sepadan
-    mengorbankan reliabilitasnya demi SQL_QUERY yang statusnya memang sudah
-    diketahui lemah (lihat README § Keterbatasan). Prompt di bawah sengaja
-    dipertahankan versi ini.
+    dialihkan ke SQL_QUERY. Kerugian arah kedua itu kini sudah hilang
+    dengan sendirinya (pertanyaan yang terjawab dokumen tidak pernah sampai
+    ke fungsi ini), tapi prompt sengaja dipertahankan apa adanya sampai ada
+    pengujian ulang yang memang menyasar kasus SQL — bukan diubah spekulatif.
     """
     decision_prompt = f"""Berdasarkan pertanyaan berikut, pilih SATU tool yang paling tepat.
 Jawab HANYA dengan satu kata: RAG_SEARCH, IMAGE_OCR, SQL_QUERY, atau DIRECT_ANSWER.
@@ -100,28 +118,22 @@ async def _prepare_answer(question: str, db: Session, image_path: str = None, do
     Mengembalikan (tool_used_lower, sources, final_prompt) — final_prompt
     sudah siap dikirim ke LLM (streaming ataupun tidak) untuk jawaban akhir.
     """
-    if image_path:
-        tool_used = "IMAGE_OCR"
-    elif document_filename:
-        tool_used = "DOCUMENT_FOCUS"
-    else:
-        tool_used = await _determine_tool(question)
-
     context = ""
     sources = []
 
-    if tool_used == "RAG_SEARCH":
-        tool_result = await rag_search(question, db)
-        if tool_result["found"]:
-            context = tool_result["context"]
-            sources = tool_result["sources"]
-
-    elif tool_used == "IMAGE_OCR" and image_path:
+    if image_path:
+        tool_used = "IMAGE_OCR"
         tool_result = await extract_text_from_image(image_path)
         if tool_result["success"]:
             context = f"Teks dari gambar:\n{tool_result['text']}"
 
-    elif tool_used == "DOCUMENT_FOCUS" and document_filename:
+    elif document_filename:
+        # Gambar yang diunggah kini juga masuk tabel documents (teks hasil OCR,
+        # lihat /upload), jadi pertanyaan soal gambar sampai ke cabang ini —
+        # bukan lagi ke IMAGE_OCR yang meng-OCR ulang tiap kali ditanya.
+        # Badge tetap dilaporkan sebagai OCR supaya pengguna tahu teksnya
+        # berasal dari pembacaan gambar, bukan dari dokumen berteks.
+        tool_used = "IMAGE_OCR" if Path(document_filename).suffix.lower() in IMAGE_EXTENSIONS else "DOCUMENT_FOCUS"
         # Ambil chunk milik dokumen ini LANGSUNG by filename, bukan lewat
         # similarity search — user baru saja upload & bertanya soal dokumen
         # ini secara spesifik, jadi tidak perlu (dan tidak boleh) bergantung
@@ -140,15 +152,45 @@ async def _prepare_answer(question: str, db: Session, image_path: str = None, do
             context = "\n\n".join(row.content for row in rows)
             sources = [document_filename]
 
-    elif tool_used == "SQL_QUERY":
-        sql_prompt = f"Buat query SQL SELECT untuk menjawab: {question}\nHanya gunakan tabel: chat_history, documents"
-        sql_query = await ask_llm(sql_prompt)
-        sql_query = _extract_sql(sql_query)
-        tool_result = await run_sql_query(sql_query, db) if sql_query else {
-            "success": False, "error": "LLM tidak menghasilkan query SQL yang bisa diekstrak.", "rows": [],
-        }
-        if tool_result["success"]:
-            context = f"Data dari database:\n{json.dumps(tool_result['rows'], ensure_ascii=False, indent=2)}"
+    else:
+        # RAG dijalankan LEBIH DULU untuk SETIAP pertanyaan tanpa lampiran,
+        # tanpa menanyakan router sama sekali. Sebelumnya router LLM yang
+        # memutuskan apakah RAG dipakai — dan saat router meleset, knowledge
+        # base tidak pernah disentuh walaupun jawabannya ada di sana.
+        # TERBUKTI saat diuji: "Bagaimana cara meminjam ruang Media Center?"
+        # dirutekan ke DIRECT_ANSWER lalu dijawab karangan penuh (Media Center
+        # dikira nama software), padahal pertanyaan yang sama dengan awalan
+        # "Menurut dokumen layanan, ..." dirutekan ke RAG dan dijawab benar
+        # dari dokumen yang sama. Retrieval murah (1 panggilan embedding +
+        # 1 query vektor, tanpa LLM) dan SIMILARITY_THRESHOLD di rag_tool.py
+        # yang menyaring hasil tak relevan — jadi menjalankannya lebih dulu
+        # lebih aman DAN lebih cepat daripada menebak lewat router: pada
+        # pertanyaan yang memang terjawab dokumen, panggilan router hilang
+        # sama sekali.
+        tool_used = "RAG_SEARCH"
+        tool_result = await rag_search(question, db)
+        if tool_result["found"]:
+            context = tool_result["context"]
+            sources = tool_result["sources"]
+        else:
+            # Retrieval benar-benar kosong (semua kandidat di bawah ambang
+            # similarity). Baru di sini router ditanya, dan tugasnya kini
+            # sempit: cuma memisahkan pertanyaan statistik (SQL_QUERY) dari
+            # pertanyaan umum. Salah rute di titik ini tidak lagi bisa
+            # "menyembunyikan" isi knowledge base, karena dokumen sudah
+            # dipastikan tidak punya jawabannya.
+            if await _determine_tool(question) == "SQL_QUERY":
+                tool_used = "SQL_QUERY"
+                sql_prompt = f"Buat query SQL SELECT untuk menjawab: {question}\nHanya gunakan tabel: chat_history, documents"
+                sql_query = await ask_llm(sql_prompt)
+                sql_query = _extract_sql(sql_query)
+                tool_result = await run_sql_query(sql_query, db) if sql_query else {
+                    "success": False, "error": "LLM tidak menghasilkan query SQL yang bisa diekstrak.", "rows": [],
+                }
+                if tool_result["success"]:
+                    context = f"Data dari database:\n{json.dumps(tool_result['rows'], ensure_ascii=False, indent=2)}"
+            else:
+                tool_used = "DIRECT_ANSWER"
 
     if context:
         # SENGAJA tidak ada instruksi "kalau tidak ada di konteks, tolak

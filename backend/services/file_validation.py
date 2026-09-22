@@ -11,11 +11,19 @@ dikirim client (keduanya bisa dipalsukan).
 """
 
 # Magic bytes untuk tiap ekstensi yang didukung.
+# .docx/.xlsx (format OOXML) sebenarnya adalah arsip ZIP — magic number-nya
+# sama persis dengan ZIP biasa ("PK\x03\x04"), jadi pengecekan ini hanya
+# memverifikasi "ini benar-benar arsip ZIP", bukan spesifik docx vs xlsx.
+# Itu cukup untuk tujuan validasi ini (menolak file yang jelas BUKAN ZIP
+# tapi diberi ekstensi .docx/.xlsx) — pembeda docx/xlsx yang sebenarnya
+# baru diketahui saat python-docx/openpyxl membuka struktur internalnya.
 _SIGNATURES: dict[str, list[bytes]] = {
     ".pdf": [b"%PDF-"],
     ".png": [b"\x89PNG\r\n\x1a\n"],
     ".jpg": [b"\xff\xd8\xff"],
     ".jpeg": [b"\xff\xd8\xff"],
+    ".docx": [b"PK\x03\x04"],
+    ".xlsx": [b"PK\x03\x04"],
 }
 
 

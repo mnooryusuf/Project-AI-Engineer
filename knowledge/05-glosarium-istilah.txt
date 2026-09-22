@@ -1,0 +1,75 @@
+GLOSARIUM ISTILAH PEMERINTAHAN DAERAH DAN TEKNOLOGI INFORMASI
+DISKOMINFO SP TIK KABUPATEN HULU SUNGAI SELATAN
+
+SPBE. Sistem Pemerintahan Berbasis Elektronik, yaitu penyelenggaraan pemerintahan yang
+memanfaatkan teknologi informasi dan komunikasi untuk memberikan layanan kepada pengguna SPBE.
+
+Indeks SPBE. Nilai hasil evaluasi tingkat kematangan penerapan Sistem Pemerintahan Berbasis
+Elektronik pada instansi pemerintah.
+
+Perangkat Daerah. Unsur pembantu kepala daerah dan Dewan Perwakilan Rakyat Daerah dalam
+penyelenggaraan urusan pemerintahan yang menjadi kewenangan daerah, meliputi sekretariat
+daerah, dinas, dan badan.
+
+RENJA. Rencana Kerja Perangkat Daerah, yaitu dokumen perencanaan perangkat daerah untuk periode
+satu tahun.
+
+RENSTRA. Rencana Strategis Perangkat Daerah, yaitu dokumen perencanaan perangkat daerah untuk
+periode lima tahun.
+
+KAK. Kerangka Acuan Kegiatan, yaitu dokumen yang memuat uraian kegiatan mencakup latar
+belakang, maksud dan tujuan, sasaran, ruang lingkup, keluaran, jadwal, dan rincian anggaran.
+
+RKA. Rencana Kerja dan Anggaran, yaitu dokumen yang memuat rencana pendapatan dan belanja
+perangkat daerah untuk satu tahun anggaran.
+
+DPA. Dokumen Pelaksanaan Anggaran, yaitu dokumen yang memuat pendapatan dan belanja yang
+digunakan sebagai dasar pelaksanaan anggaran oleh perangkat daerah.
+
+PBJ. Pengadaan Barang dan Jasa, yaitu kegiatan memperoleh barang dan jasa oleh instansi
+pemerintah yang prosesnya dimulai dari identifikasi kebutuhan sampai serah terima hasil
+pekerjaan.
+
+E-Purchasing. Tata cara pembelian barang dan jasa melalui sistem katalog elektronik.
+
+Pengadaan Langsung. Metode pemilihan penyedia barang dan jasa untuk paket pekerjaan dengan
+nilai tertentu yang dilaksanakan tanpa melalui tender.
+
+Pejabat Pengadaan. Pejabat yang ditetapkan untuk melaksanakan pengadaan langsung dan
+e-purchasing sesuai batas kewenangannya.
+
+SSH. Standar Satuan Harga, yaitu acuan harga satuan tertinggi barang dan jasa yang digunakan
+dalam penyusunan anggaran belanja daerah.
+
+Berita Acara. Dokumen yang memuat catatan resmi mengenai pelaksanaan suatu kegiatan yang
+ditandatangani para pihak yang terlibat.
+
+PPID. Pejabat Pengelola Informasi dan Dokumentasi, yaitu pejabat yang bertanggung jawab
+mengelola dan melayani permintaan informasi publik pada badan publik.
+
+Keterbukaan Informasi Publik. Asas yang menyatakan bahwa setiap informasi publik bersifat
+terbuka dan dapat diakses oleh pengguna informasi publik, kecuali informasi yang dikecualikan.
+
+Persandian. Kegiatan pengamanan informasi melalui penerapan teknik kriptografi untuk menjamin
+kerahasiaan, keutuhan, dan keaslian informasi.
+
+Tanda Tangan Elektronik. Tanda tangan yang terdiri atas informasi elektronik yang dilekatkan
+pada suatu informasi elektronik dan digunakan sebagai alat verifikasi dan autentikasi.
+
+Sertifikat Elektronik. Sertifikat yang bersifat elektronik yang memuat tanda tangan elektronik
+dan identitas yang menunjukkan status subjek hukum para pihak dalam transaksi elektronik.
+
+Statistik Sektoral. Statistik yang pemanfaatannya ditujukan untuk memenuhi kebutuhan instansi
+pemerintah tertentu dalam rangka penyelenggaraan tugas dan fungsinya.
+
+Pusat Data. Fasilitas yang digunakan untuk menempatkan sistem elektronik dan komponen
+terkaitnya untuk keperluan penempatan, penyimpanan, dan pengolahan data.
+
+Media Center. Ruang dan fasilitas yang disediakan pemerintah daerah untuk kegiatan komunikasi
+publik, peliputan, konferensi pers, dan konferensi video.
+
+Nota Dinas. Naskah dinas intern yang dibuat oleh pejabat dalam melaksanakan tugas untuk
+menyampaikan laporan, pemberitahuan, atau permintaan kepada pejabat lain di lingkungan
+instansi yang sama.
+
+Disposisi. Petunjuk tertulis pimpinan mengenai tindak lanjut penyelesaian suatu surat masuk.
