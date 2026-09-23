@@ -314,6 +314,38 @@ async def _document_focus_context(db: Session, document_filename: str, question:
     return rows[0].content + "".join(r.content[CHUNK_OVERLAP:] for r in rows[1:])
 
 
+def _normalize_name(text: str) -> str:
+    return " ".join(re.sub(r"[^0-9a-z]+", " ", text.lower()).split())
+
+
+def find_mentioned_document(question: str, db: Session) -> str | None:
+    """Dokumen di knowledge base yang namanya disebut di pertanyaan.
+
+    Tanpa ini, menyebut nama dokumen di percakapan baru tidak ada gunanya:
+    "SPT SINAU JOGJA AI ENGINEER.docx ambil nama kepala dinas dari dokumen
+    ini" tetap dijawab dari surat undangan, karena pencarian umum menaruh
+    tiga chunk surat itu di atas SPT (diuji). Cocok kalau nama lengkap tanpa
+    ekstensi, atau tiga kata pertamanya, muncul utuh di pertanyaan. Nama
+    pendek (< 5 huruf, mis. "6.jpeg") hanya cocok lewat nama file lengkap
+    beserta ekstensinya, supaya angka biasa di pertanyaan tidak ikut cocok.
+    Kalau beberapa cocok, yang paling panjang (paling spesifik) menang.
+    """
+    q = f" {_normalize_name(question)} "
+    best, best_len = None, 0
+    for (filename,) in db.query(Document.filename).distinct():
+        stem = _normalize_name(Path(filename).stem)
+        candidates = [_normalize_name(filename)]
+        if len(stem) >= 5:
+            candidates.append(stem)
+            words = stem.split()
+            if len(words) > 3:
+                candidates.append(" ".join(words[:3]))
+        for cand in candidates:
+            if cand and f" {cand} " in q and len(cand) > best_len:
+                best, best_len = filename, len(cand)
+    return best
+
+
 def _trim_history(history: list[dict] | None) -> list[dict]:
     """Batasi riwayat ke HISTORY_MAX_MESSAGES pesan terakhir dan potong
     pesan yang terlalu panjang — cukup untuk rujukan, bukan salinan penuh."""
@@ -341,7 +373,34 @@ Jawab dengan satu kata saja: LANJUT atau BARU.
 Jawaban:"""
 
 
-async def _is_follow_up(question: str, history: list[dict] | None, active_document: str = None) -> bool:
+# Kelonggaran untuk _active_document_wins. Glosarium istilah menarik skor
+# tinggi untuk hampir semua pertanyaan umum: "siapa saja yang ditugaskan?"
+# -> glosarium 0.522 vs SPT (dokumen aktif, jawabannya memang di sana) 0.506.
+ACTIVE_DOCUMENT_MARGIN = 0.05
+
+
+async def _active_document_wins(db: Session, active_document: str, question: str) -> bool:
+    """True kalau chunk terbaik dokumen aktif lebih mirip dengan pertanyaan
+    daripada chunk terbaik dokumen LAIN mana pun. Membandingkan, bukan
+    memakai ambang: skor mutlak lanjutan dan pindah topik saling tumpang
+    tindih, tapi pada pindah topik asli dokumen lain selalu menang jauh
+    (Media Center +0.50, SPBE +0.33)."""
+    embedding = str(await get_embedding(question))
+    row = db.execute(
+        text("""
+            SELECT
+                MAX(1 - (embedding <=> CAST(:e AS vector))) FILTER (WHERE filename = :f) AS own,
+                MAX(1 - (embedding <=> CAST(:e AS vector))) FILTER (WHERE filename <> :f) AS other
+            FROM documents
+        """),
+        {"e": embedding, "f": active_document},
+    ).first()
+    return row.own is not None and (row.other is None or row.own >= row.other - ACTIVE_DOCUMENT_MARGIN)
+
+
+async def _is_follow_up(
+    question: str, history: list[dict] | None, active_document: str = None, db: Session = None
+) -> bool:
     """Apakah pertanyaan ini melanjutkan percakapan sebelumnya?
 
     Menentukan DUA hal sekaligus di pemanggil: apakah riwayat percakapan
@@ -358,7 +417,10 @@ async def _is_follow_up(question: str, history: list[dict] | None, active_docume
       1. sapaan / pertanyaan tentang asisten,
          pertanyaan statistik database            -> BARU (tanpa LLM)
       2. kata penanda lanjutan atau akhiran -nya  -> LANJUT (tanpa LLM)
-      3. selain itu classifier LLM (~0,8 detik pada llama3.2:3b)
+      3. dokumen aktif paling mirip dibanding dokumen lain -> LANJUT
+         (menutup kelemahan classifier: "Siapa saja yang diundang?",
+         "siapa saja yang ditugaskan?" sempat dinilai BARU)
+      4. selain itu classifier LLM (~0,8 detik pada llama3.2:3b)
     Dua yang masih salah: "Siapa saja yang diundang?" (dinilai BARU) dan
     "Apa tugas bidang statistik?" setelah membahas surat (dinilai LANJUT).
     Sempat dicoba menambahkan cuplikan isi dokumen ke prompt classifier —
@@ -373,6 +435,8 @@ async def _is_follow_up(question: str, history: list[dict] | None, active_docume
     if is_stats_question(question):
         return False
     if FOLLOW_UP_CUES.search(question) or NYA_SUFFIX.search(question):
+        return True
+    if active_document and db is not None and await _active_document_wins(db, active_document, question):
         return True
 
     prev_question = next((m["content"] for m in reversed(history) if m["role"] == "user"), "")
@@ -626,7 +690,7 @@ async def run_agent_stream(
     """
     follow_up = False
     if not (image_path or document_filename):
-        follow_up = await _is_follow_up(question, history, active_document)
+        follow_up = await _is_follow_up(question, history, active_document, db)
 
     retrieval_query = None
     if follow_up:

@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import func, text
 from jose import JWTError, jwt
 import bcrypt
 
@@ -28,7 +28,7 @@ from schemas import (
     UserCreate, UserResponse, Token, TokenData,
     ChatHistoryItem, ChatSessionItem, DocumentListItem,
 )
-from agent import HISTORY_MAX_MESSAGES, run_agent_stream
+from agent import HISTORY_MAX_MESSAGES, find_mentioned_document, run_agent_stream
 from services.document_service import process_and_store_document, store_text_as_document
 from services.llm_service import check_ollama_status
 from services.file_validation import verify_file_signature
@@ -342,6 +342,13 @@ async def chat(
         if r.role in ("user", "assistant")
     ]
 
+    # Dokumen yang disebut namanya di pertanyaan diperlakukan seperti lampiran
+    # (dibaca utuh), dan dicatat sebagai document_ref supaya pertanyaan
+    # lanjutan tetap membahasnya — lihat agent.find_mentioned_document.
+    mentioned_document = None
+    if not request.document_filename and not request.image_filename:
+        mentioned_document = find_mentioned_document(request.message, db)
+
     # Dokumen yang terakhir dilampirkan di sesi ini — dipakai sebagai fokus
     # pertanyaan lanjutan yang tidak membawa lampiran baru. Kedaluwarsa begitu
     # percakapan pindah topik: kalau setelah jawaban pertama atas lampiran itu
@@ -350,7 +357,7 @@ async def chat(
     # soal Media Center dijawab dari surat undangan yang dilampirkan jauh
     # sebelumnya (diuji). Diabaikan juga kalau dokumennya sudah dihapus.
     active_document = None
-    if not request.document_filename and not request.image_filename:
+    if not request.document_filename and not request.image_filename and not mentioned_document:
         last_doc = (
             db.query(ChatHistory.id, ChatHistory.document_ref)
             .filter(
@@ -391,7 +398,7 @@ async def chat(
             _display_filename(request.image_filename or request.document_filename)
             if attachment_type else None
         ),
-        document_ref=request.document_filename,
+        document_ref=request.document_filename or mentioned_document,
     ))
     db.commit()
 
@@ -417,6 +424,8 @@ async def chat(
         if not exists:
             raise HTTPException(status_code=404, detail="Dokumen tidak ditemukan di knowledge base.")
         document_filename = request.document_filename
+    elif mentioned_document:
+        document_filename = mentioned_document
 
     async def event_stream():
         stream_db = SessionLocal()
@@ -568,6 +577,18 @@ async def _process_upload_job(job_id: str, file_path: str, original_filename: st
     async with _upload_semaphore:
         db = SessionLocal()
         try:
+            # Unggah ulang berkas bernama sama MENGGANTIKAN versi lama, bukan
+            # menambah salinan. Sebelumnya tiap unggahan ulang menumpuk:
+            # surat undangan tersimpan 3x (24 chunk), dan pencarian untuk
+            # "siapa nama kepala dinas" mengembalikan 6 chunk teratas yang
+            # semuanya dari surat itu (sebagian salinan identik), menyingkirkan
+            # dokumen lain yang sebenarnya memuat jawabannya. Chunk lama baru
+            # dihapus SETELAH versi baru berhasil tersimpan, supaya unggahan
+            # yang gagal tidak menghilangkan dokumen yang sudah ada.
+            old_max_id = db.query(func.max(Document.id)).filter(
+                Document.filename == original_filename
+            ).scalar()
+
             if ext in DOCUMENT_EXTENSIONS:
                 chunks = await process_and_store_document(file_path, original_filename, db)
                 gagal_pesan = (
@@ -592,6 +613,12 @@ async def _process_upload_job(job_id: str, file_path: str, original_filename: st
             # pertanyaan berikutnya dijawab mengarang. stored_filename
             # dibiarkan kosong supaya tidak ada lampiran yang menunjuk ke
             # dokumen tanpa isi.
+            if chunks > 0 and old_max_id is not None:
+                db.query(Document).filter(
+                    Document.filename == original_filename, Document.id <= old_max_id
+                ).delete(synchronize_session=False)
+                db.commit()
+
             job_status = "done" if chunks > 0 else "warning"
             _finish_job(
                 db, job_id, job_status,

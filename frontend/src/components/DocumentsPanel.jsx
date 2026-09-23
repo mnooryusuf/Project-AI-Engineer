@@ -1,7 +1,7 @@
 // src/components/DocumentsPanel.jsx — Daftar dokumen persisten di
 // knowledge base (bukan cuma toast notifikasi sesaat saat upload).
 import { useEffect, useState } from 'react'
-import { FileText, X, Trash2 } from 'lucide-react'
+import { FileText, X, Trash2, MessageSquare } from 'lucide-react'
 import { getDocuments, deleteDocument } from '../services/api'
 
 function formatDate(iso) {
@@ -9,7 +9,7 @@ function formatDate(iso) {
   return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-export default function DocumentsPanel({ isOpen, onClose }) {
+export default function DocumentsPanel({ isOpen, onClose, onAsk }) {
   const [documents, setDocuments] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -119,14 +119,24 @@ export default function DocumentsPanel({ isOpen, onClose }) {
                       </button>
                     </div>
                   ) : (
-                    <button
-                      onClick={() => setConfirmingFilename(doc.filename)}
-                      className="w-8 h-8 flex-shrink-0 rounded-lg flex items-center justify-center hover:bg-red-500/10 transition-colors"
-                      style={{ color: 'var(--text-muted)' }}
-                      title="Hapus dari knowledge base"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button
+                        onClick={() => onAsk?.(doc.filename)}
+                        className="h-8 px-2.5 flex-shrink-0 rounded-lg flex items-center gap-1.5 text-xs font-semibold hover:bg-[var(--overlay-2)] transition-colors"
+                        style={{ color: 'var(--accent-blue)' }}
+                        title="Lampirkan dokumen ini ke percakapan yang sedang dibuka"
+                      >
+                        <MessageSquare size={15} /> Tanyakan
+                      </button>
+                      <button
+                        onClick={() => setConfirmingFilename(doc.filename)}
+                        className="w-8 h-8 flex-shrink-0 rounded-lg flex items-center justify-center hover:bg-red-500/10 transition-colors"
+                        style={{ color: 'var(--text-muted)' }}
+                        title="Hapus dari knowledge base"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   )}
                 </li>
               ))}

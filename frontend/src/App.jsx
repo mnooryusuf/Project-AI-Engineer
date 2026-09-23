@@ -176,6 +176,9 @@ export default function App() {
   const [sessionId, setSessionId] = useState(() => uuidv4())
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [documentsOpen, setDocumentsOpen] = useState(false)
+  // { filename, requestedAt } — objek baru tiap klik, supaya memilih dokumen
+  // yang sama dua kali tetap memicu efek di ChatBox.
+  const [attachRequest, setAttachRequest] = useState(null)
   // Default 'dark' — tema asli aplikasi. index.html sudah menerapkan nilai
   // tersimpan ke <html> lebih dulu (hindari flash tema salah saat load);
   // state di sini cuma menyusul supaya React tahu nilainya untuk re-render
@@ -276,9 +279,17 @@ export default function App() {
           onMessageSent={loadSessions}
           onLogout={handleLogout}
           onToggleSidebar={() => setSidebarOpen((v) => !v)}
+          attachRequest={attachRequest}
         />
       </div>
-      <DocumentsPanel isOpen={documentsOpen} onClose={() => setDocumentsOpen(false)} />
+      <DocumentsPanel
+        isOpen={documentsOpen}
+        onClose={() => setDocumentsOpen(false)}
+        onAsk={(filename) => {
+          setAttachRequest({ filename, requestedAt: Date.now() })
+          setDocumentsOpen(false)
+        }}
+      />
     </div>
   )
 }

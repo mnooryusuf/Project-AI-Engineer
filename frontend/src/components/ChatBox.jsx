@@ -27,7 +27,7 @@ const formatBytes = (bytes) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSidebar }) {
+export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSidebar, attachRequest }) {
   const [messages, setMessages]   = useState([])
   const [input, setInput]         = useState('')
   const [loading, setLoading]     = useState(false)
@@ -89,6 +89,22 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
 
     return () => { cancelled = true }
   }, [sessionId])
+
+  // Dokumen yang dipilih lewat tombol "Tanyakan" di panel Dokumen — sudah
+  // ada di knowledge base, jadi langsung jadi lampiran tanpa unggah ulang.
+  // Tanpa ini, di percakapan baru dokumen lama hanya bisa dijangkau lewat
+  // pencarian umum, yang bisa menaruh dokumen lain di atasnya.
+  useEffect(() => {
+    if (!attachRequest) return
+    const { filename } = attachRequest
+    setPendingAttachment({
+      type: IMAGE_EXTENSIONS.some((e) => filename.toLowerCase().endsWith(e)) ? 'image' : 'document',
+      filename,
+      stored_filename: filename,
+      previewUrl: null,
+    })
+    textareaRef.current?.focus()
+  }, [attachRequest])
 
   const notify = (msg, isError = false) => {
     if (isError) setError(msg)
