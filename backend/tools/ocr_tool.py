@@ -39,6 +39,13 @@ def _use_apple_vision() -> bool:
         return False
 
 
+def uses_fast_ocr() -> bool:
+    """Apple Vision aktif — dipakai document_service untuk memutuskan apakah
+    gambar di dalam halaman PDF yang sudah berteks ikut dibaca (~1 dtk/hal),
+    yang terlalu lambat kalau memakai EasyOCR (~33 dtk/hal)."""
+    return _use_apple_vision()
+
+
 def _vision_lines(image) -> list[tuple[float, float, float, float, str]]:
     """OCR satu gambar PIL lewat Apple Vision -> [(x0, y0, x1, y1, teks)]
     dalam piksel, asal kiri ATAS (Vision memakai koordinat ternormalisasi

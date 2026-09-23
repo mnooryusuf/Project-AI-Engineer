@@ -38,6 +38,34 @@ MIN_PAGE_TEXT_CHARS = 50
 # dikerjakan diam-diam sampai koneksi putus.
 MAX_OCR_PAGES = 10
 
+# Batas yang sama saat Apple Vision aktif (tools/ocr_tool.uses_fast_ocr):
+# ~1 detik per halaman, jadi 60 halaman masih sekitar satu menit.
+MAX_OCR_PAGES_FAST = 60
+
+
+def _page_has_images(page) -> bool:
+    """Halaman PDF memuat gambar (XObject /Image) — dicek dari resource
+    halaman tanpa mendekode gambarnya, supaya murah untuk PDF besar."""
+    try:
+        xobjects = page.get("/Resources", {}).get("/XObject", {})
+        return any(obj.get_object().get("/Subtype") == "/Image" for obj in xobjects.values())
+    except Exception:
+        return False
+
+
+def _normalize(text: str) -> str:
+    return "".join(ch for ch in text.lower() if ch.isalnum())
+
+
+def _new_ocr_lines(ocr_text: str, text_layer: str) -> list[str]:
+    """Baris OCR yang BELUM ada di lapisan teks halaman. Teks ketikan asli
+    selalu lebih akurat, jadi yang ditambahkan hanya isi gambarnya saja."""
+    layer = _normalize(text_layer)
+    return [
+        line for line in ocr_text.splitlines()
+        if len(_normalize(line)) >= 3 and _normalize(line) not in layer
+    ]
+
 
 def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> List[str]:
     """Membagi teks menjadi chunk-chunk kecil dengan overlap."""
@@ -70,12 +98,34 @@ async def extract_text_from_file(file_path: str) -> str:
         # bercampur: halaman ketikan digital ditambah halaman tanda tangan
         # hasil scan. Halaman yang sudah punya teks tidak di-OCR ulang —
         # teks aslinya selalu lebih akurat daripada hasil pembacaan gambar.
+        from tools.ocr_tool import extract_text_from_pdf_pages, uses_fast_ocr
+
         perlu_ocr = [i for i, t in enumerate(halaman) if len(t.strip()) < MIN_PAGE_TEXT_CHARS]
-        if perlu_ocr:
-            from tools.ocr_tool import extract_text_from_pdf_pages
-            hasil_ocr = await extract_text_from_pdf_pages(file_path, perlu_ocr[:MAX_OCR_PAGES])
+
+        # Halaman yang SUDAH berteks tapi memuat gambar juga dibaca, karena
+        # isi pentingnya sering ada di gambar: di berita acara survei harga,
+        # lapisan teks hanya berisi nama barang, sedangkan harganya
+        # (Rp17.355.000, Rp10.960.000, ...) ada di tangkapan layar
+        # marketplace yang ditempel — tidak pernah terbaca sebelumnya. Hanya
+        # dengan Apple Vision; dengan EasyOCR tiap halaman ~33 detik.
+        fast = uses_fast_ocr()
+        tambahan = []
+        if fast:
+            tambahan = [
+                i for i, page in enumerate(reader.pages)
+                if i not in perlu_ocr and _page_has_images(page)
+            ]
+
+        target = (perlu_ocr + tambahan)[: MAX_OCR_PAGES_FAST if fast else MAX_OCR_PAGES]
+        if target:
+            hasil_ocr = await extract_text_from_pdf_pages(file_path, target)
             for i, teks in hasil_ocr.items():
-                halaman[i] = teks
+                if i in perlu_ocr:
+                    halaman[i] = teks
+                else:
+                    baru = _new_ocr_lines(teks, halaman[i])
+                    if baru:
+                        halaman[i] += "\n[Teks dalam gambar]\n" + "\n".join(baru)
 
         return "\n".join(halaman)
 
