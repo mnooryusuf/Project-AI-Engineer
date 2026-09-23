@@ -428,7 +428,7 @@ async def chat(
             async for event in run_agent_stream(
                 question=request.message, db=stream_db, image_path=image_path,
                 document_filename=document_filename,
-                history=history, active_document=active_document,
+                history=history, active_document=active_document, user_id=user_id,
             ):
                 if event["type"] == "meta":
                     meta_tool_used = event.get("tool_used")
