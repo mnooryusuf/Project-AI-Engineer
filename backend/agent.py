@@ -72,6 +72,42 @@ ANALYSIS_REQUEST = re.compile(
     re.IGNORECASE,
 )
 
+# Jawaban berbasis konteks yang intinya "tidak ada di dokumen". Hanya dicek
+# pada jawaban PENDEK (NOT_FOUND_MAX_CHARS) dan bukan permintaan ringkasan:
+# ringkasan yang lengkap pun sering memuat butir "Tidak ada informasi" untuk
+# satu-dua poin, dan itu tidak berarti jawabannya kosong. Frasa diambil dari
+# jawaban llama3.2:3b yang sebenarnya, mis. "Tidak ada informasi tentang
+# anggaran kegiatan ini dalam dokumen", "Kepala Dinas Kominfo HSS tidak
+# disebutkan dalam dokumen tersebut", "Maaf, saya tidak bisa membantu ...".
+NOT_FOUND = re.compile(
+    r"tidak (ada|terdapat|ditemukan|disebutkan|dicantumkan|tercantum|tersedia|dijelaskan)\b"
+    r"|tidak (menemukan|memiliki) informasi|belum (ada|tersedia)\b|tidak diketahui"
+    r"|tidak (bisa|dapat) (membantu|menemukan|menjawab)",
+    re.IGNORECASE,
+)
+NOT_FOUND_MAX_CHARS = 350
+
+# Jawaban dari pengetahuan model sendiri — dipakai saat RAG kosong
+# (DIRECT_ANSWER) dan sebagai jawaban tambahan saat konteks dokumen ternyata
+# tidak memuat jawabannya. Pagar "data khusus dinas" TERBUKTI perlu: tanpa
+# itu "Berapa biaya layanan hosting?" dijawab "Rp 500.000 hingga Rp 5.000.000
+# per tahun di Diskominfo HSS" — karangan penuh, tidak ada di dokumen mana
+# pun. Dengan pagar ini (diuji 2x per pertanyaan, llama3.2:3b): biaya
+# hosting, kepala dinas, anggaran kegiatan, penanda tangan surat -> menolak
+# menebak; ibu kota Jepang, pantun, cara install Zoom, persiapan interviu
+# daring -> tetap dijawab.
+GENERAL_KNOWLEDGE_PROMPT = """Pertanyaan ini tidak terjawab oleh dokumen dinas yang tersedia, jadi jawab dari pengetahuan umummu.
+Kalau pertanyaannya tentang data khusus Diskominfo atau Kabupaten Hulu Sungai Selatan yang tidak kamu ketahui pasti (nama pejabat, harga atau tarif layanan, nomor surat, jadwal, prosedur internal), jangan menebak: katakan singkat bahwa informasinya belum ada di dokumen dan pengguna bisa menanyakannya langsung ke Diskominfo.
+
+Pertanyaan: {question}"""
+
+FALLBACK_HEADER = "\n\n---\n\n**Di luar dokumen** — jawaban dari pengetahuan umum model, mohon diverifikasi:\n\n"
+
+
+def _looks_not_found(answer: str) -> bool:
+    return len(answer.strip()) <= NOT_FOUND_MAX_CHARS and bool(NOT_FOUND.search(answer))
+
+
 # Ekstensi yang isinya berasal dari OCR, bukan teks asli dokumen — dipakai
 # hanya untuk menentukan badge yang ditampilkan ke pengguna.
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
@@ -371,6 +407,10 @@ async def _prepare_answer(
             context = await _document_focus_context(db, active_document, retrieval_query or question)
             if context:
                 sources = [active_document]
+        elif SMALL_TALK.search(question):
+            # "terima kasih" sempat lolos ambang RAG dan mengutip surat
+            # peminjaman Media Center (kalimat penutup suratnya) sebagai sumber.
+            tool_used = "DIRECT_ANSWER"
         elif (tool_result := await rag_search(retrieval_query or question, db))["found"]:
             context = tool_result["context"]
             sources = tool_result["sources"]
@@ -476,7 +516,9 @@ Pertanyaan: {question}"""
         # menjadi sitasi palsu, karena jawabannya tidak berasal dari dokumen.
         tool_used = "DIRECT_ANSWER"
         sources = []
-        final_prompt = question
+        # Sapaan & pertanyaan tentang asisten dikirim apa adanya — prompt
+        # "tidak terjawab oleh dokumen" tidak cocok untuk "terima kasih".
+        final_prompt = question if SMALL_TALK.search(question) else GENERAL_KNOWLEDGE_PROMPT.format(question=question)
 
     return tool_used.lower(), [{"filename": s} for s in sources], final_prompt
 
@@ -545,5 +587,20 @@ async def run_agent_stream(
 
     yield {"type": "meta", "tool_used": tool_used, "sources": sources, "follow_up": follow_up}
 
+    answer = ""
     async for token in stream_llm(final_prompt, system_prompt=SYSTEM_PROMPT, history=_trim_history(history)):
+        answer += token
         yield {"type": "token", "text": token}
+
+    # Konteks ada tapi tidak memuat jawabannya -> tambahkan jawaban dari
+    # pengetahuan model, ditandai jelas sebagai di luar dokumen. Dibuat
+    # non-streaming supaya bisa diperiksa dulu: kalau model juga tidak tahu
+    # (data khusus dinas), tidak ada yang ditambahkan — pengguna tidak perlu
+    # membaca dua penolakan berturut-turut.
+    if tool_used in ("rag_search", "document_focus", "image_ocr") and not ANALYSIS_REQUEST.search(question) and _looks_not_found(answer):
+        general = await ask_llm(
+            GENERAL_KNOWLEDGE_PROMPT.format(question=question),
+            system_prompt=SYSTEM_PROMPT, history=_trim_history(history),
+        )
+        if general.strip() and not _looks_not_found(general):
+            yield {"type": "token", "text": FALLBACK_HEADER + general.strip()}
