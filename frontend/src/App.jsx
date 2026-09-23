@@ -1,6 +1,6 @@
 // src/App.jsx — Root Application dengan Auth flow (Premium UI)
 import { useState, useEffect, useCallback } from 'react'
-import { Bot, Loader2, AlertTriangle } from 'lucide-react'
+import { Bot, Loader2, AlertTriangle, Eye, EyeOff } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
 import ChatBox from './components/ChatBox'
 import Sidebar from './components/Sidebar'
@@ -13,6 +13,7 @@ function LoginPage({ onLogin }) {
   const [username, setUsername] = useState('')
   const [email, setEmail]     = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
 
@@ -125,20 +126,31 @@ function LoginPage({ onLogin }) {
             {/* Password */}
             <div>
               <label className="text-xs font-medium mb-1.5 ml-1 block" style={{ color: 'var(--text-muted)' }}>Password</label>
-              <input
-                id="password-input"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full px-4 py-3 rounded-2xl text-sm outline-none interactive-ring bg-transparent"
-                style={{
-                  border: '1px solid var(--glass-border)',
-                  color: 'var(--text-primary)',
-                  backgroundColor: 'var(--overlay-1)'
-                }}
-                placeholder="••••••••"
-              />
+              <div className="relative">
+                <input
+                  id="password-input"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="w-full pl-4 pr-10 py-3 rounded-2xl text-sm outline-none interactive-ring bg-transparent"
+                  style={{
+                    border: '1px solid var(--glass-border)',
+                    color: 'var(--text-primary)',
+                    backgroundColor: 'var(--overlay-1)'
+                  }}
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md opacity-60 hover:opacity-100 transition-opacity"
+                  style={{ color: 'var(--text-primary)' }}
+                  title={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
 
             {/* Error */}
