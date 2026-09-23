@@ -396,9 +396,35 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
               <Bot size={18} className="text-white drop-shadow-md" />
             </div>
             <div className="flex items-center gap-2 bg-[var(--overlay-1)] px-5 py-4 rounded-[20px] rounded-tl-[4px] border border-[var(--glass-border)] shadow-sm">
-              <span className="typing-dot" />
-              <span className="typing-dot" />
-              <span className="typing-dot" />
+              {(() => {
+                const lastMsg = messages[messages.length - 1]
+                const isAnalyzing = lastMsg?.role === 'user' && lastMsg?.attachment
+                if (isAnalyzing) {
+                  return (
+                    <div className="flex items-center gap-2.5 px-1 py-0.5">
+                      <svg className="animate-spin w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="10" stroke="var(--overlay-3)" strokeWidth="3"/>
+                        <path d="M12 2a10 10 0 0 1 10 10" stroke="var(--accent-purple)" strokeWidth="3" strokeLinecap="round"/>
+                      </svg>
+                      <span className="text-[13px] font-medium" style={{ color: 'var(--text-muted)' }}>
+                        Menganalisis {lastMsg.attachment.type === 'image' ? 'gambar' : 'dokumen'}...
+                      </span>
+                    </div>
+                  )
+                }
+                return (
+                  <div className="flex items-center gap-2.5 px-1 py-0.5">
+                    <div className="flex items-center gap-1">
+                      <span className="typing-dot" />
+                      <span className="typing-dot" />
+                      <span className="typing-dot" />
+                    </div>
+                    <span className="text-[13px] font-medium animate-pulse" style={{ color: 'var(--text-muted)' }}>
+                      Sedang berpikir...
+                    </span>
+                  </div>
+                )
+              })()}
             </div>
           </div>
         )}
