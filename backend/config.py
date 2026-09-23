@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     # Dimensi 768 harus cocok dengan Vector() di models.py.
     ollama_embedding_model: str = "paraphrase-multilingual"
 
+    # OCR: "auto" = Apple Vision di macOS (jauh lebih akurat & cepat, lihat
+    # tools/ocr_tool.py), EasyOCR di tempat lain. "easyocr" memaksa EasyOCR.
+    ocr_engine: str = "auto"
+
     # Storage
     upload_dir: str = "./storage/uploads"
     processed_dir: str = "./storage/processed"

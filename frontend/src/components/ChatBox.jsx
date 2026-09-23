@@ -9,7 +9,7 @@ import Mascot from './Mascot'
 // tanpa mengetik apa pun — pola yang sama dipakai ChatGPT/Gemini: lampirkan
 // file, kirim kosong, AI otomatis meringkas/menganalisis.
 const DEFAULT_PROMPT = {
-  image: 'Apa isi teks pada gambar ini?',
+  image: 'Jelaskan isi gambar ini secara lengkap.',
   document: 'Ringkas isi dokumen ini.',
 }
 

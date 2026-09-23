@@ -17,6 +17,8 @@ langchain-ollama==0.2.0
 
 # OCR (EasyOCR — lebih ringan dari PaddleOCR)
 easyocr==1.7.2
+# Apple Vision OCR — hanya macOS; di Linux dilewati dan EasyOCR yang dipakai
+ocrmac==1.0.1; sys_platform == "darwin"
 
 # Document Processing
 pypdf==5.0.1
