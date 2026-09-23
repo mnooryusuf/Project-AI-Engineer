@@ -339,7 +339,10 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
           <div className="flex flex-col items-center justify-center h-full text-center slide-up-fade px-4 sm:px-8 mt-4 sm:mt-0">
             <Mascot size={72} className="mb-4 drop-shadow-lg" />
             <div>
-              <p className="font-bold text-xl mb-2 tracking-tight" style={{ color: 'var(--text-primary)' }}>Halo, saya Nanang</p>
+              <p className="font-bold text-xl mb-1 tracking-tight" style={{ color: 'var(--text-primary)' }}>Halo, saya Nanang</p>
+              <p className="text-[11px] italic mb-3 max-w-md mx-auto" style={{ color: 'var(--text-muted)', opacity: 0.8 }}>
+                Naskah, Arsip, dan Navigasi Analitik nan Gesit
+              </p>
               <p className="text-sm max-w-md mx-auto" style={{ color: 'var(--text-muted)' }}>
                 Ajukan pertanyaan, minta ringkasan, atau unggah dokumen/gambar untuk saya analisis.
               </p>
