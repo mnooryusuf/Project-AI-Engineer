@@ -11,7 +11,7 @@ from models import Document
 from services.document_service import CHUNK_OVERLAP
 from services.embedding_service import get_embedding
 from services.llm_service import ask_llm, stream_llm
-from tools.rag_tool import SIMILARITY_THRESHOLD, rag_search
+from tools.rag_tool import rag_search
 from tools.ocr_tool import extract_text_from_image
 from tools.sql_tool import run_sql_query
 
@@ -40,10 +40,17 @@ HISTORY_MAX_CHARS_PER_MESSAGE = 1200
 # Tanpa daftar ini "lanjutkan" ikut dialihkan ke glosarium.
 FOLLOW_UP_CUES = re.compile(
     r"\b(lanjut\w*|terus\w*|teruskan|detail\w*|rinci\w*|poin|butir|nomor|maksud\w*"
-    r"|tadi|tersebut|sebelumnya|dokumen ini|surat ini|isinya|ringkas\w*|rangkum\w*"
+    r"|tadi|tersebut|sebelumnya|(dokumen|surat|kegiatan|acara|rapat|gambar|produk|foto) (ini|itu)"
+    r"|isinya|ringkas\w*|rangkum\w*"
     r"|apa lagi|selain itu|contoh\w*|jelaskan lagi|perjelas)\b",
     re.IGNORECASE,
 )
+
+# Kata berakhiran -nya ("suratnya", "harganya", "mereknya") hampir selalu
+# merujuk ke hal yang sedang dibahas. Classifier LLM di _is_follow_up justru
+# paling sering salah di sini — "apa mereknya?", "harganya berapa?",
+# "warnanya apa?" dinilai topik BARU — jadi dikenali lebih dulu tanpa LLM.
+NYA_SUFFIX = re.compile(r"\b\w{3,}nya\b", re.IGNORECASE)
 
 # Sapaan/pertanyaan tentang asisten sendiri. Di sesi yang punya dokumen
 # aktif, pertanyaan ini skornya rendah ke SEMUA dokumen sehingga tidak
@@ -224,20 +231,6 @@ async def _document_focus_context(db: Session, document_filename: str, question:
     return rows[0].content + "".join(r.content[CHUNK_OVERLAP:] for r in rows[1:])
 
 
-async def _best_similarity_in_document(db: Session, document_filename: str, question: str) -> float:
-    """Skor kemiripan tertinggi pertanyaan terhadap chunk dokumen tertentu."""
-    query_embedding = await get_embedding(question)
-    row = db.execute(
-        text("""
-            SELECT MAX(1 - (embedding <=> CAST(:embedding AS vector))) AS best
-            FROM documents
-            WHERE filename = :filename
-        """),
-        {"filename": document_filename, "embedding": str(query_embedding)},
-    ).first()
-    return float(row.best) if row and row.best is not None else 0.0
-
-
 def _trim_history(history: list[dict] | None) -> list[dict]:
     """Batasi riwayat ke HISTORY_MAX_MESSAGES pesan terakhir dan potong
     pesan yang terlalu panjang — cukup untuk rujukan, bukan salinan penuh."""
@@ -250,12 +243,69 @@ def _trim_history(history: list[dict] | None) -> list[dict]:
     return trimmed
 
 
+FOLLOW_UP_PROMPT = """Tentukan apakah pertanyaan baru masih melanjutkan topik percakapan sebelumnya.
+
+Topik sebelumnya: {topic}
+Pertanyaan sebelumnya: {prev_question}
+Jawaban sebelumnya: {prev_answer}
+
+Pertanyaan baru: {question}
+
+Jawab LANJUT kalau pertanyaan baru membahas hal yang sama, merujuk ke isi, bagian, atau detail topik sebelumnya (walaupun tidak disebut namanya).
+Jawab BARU kalau pertanyaan baru membahas hal lain yang tidak ada hubungannya.
+Jawab dengan satu kata saja: LANJUT atau BARU.
+
+Jawaban:"""
+
+
+async def _is_follow_up(question: str, history: list[dict] | None, active_document: str = None) -> bool:
+    """Apakah pertanyaan ini melanjutkan percakapan sebelumnya?
+
+    Menentukan DUA hal sekaligus di pemanggil: apakah riwayat percakapan
+    ikut dikirim ke LLM, dan apakah dokumen aktif sesi tetap jadi fokus.
+    Tanpa pemisahan ini, pertanyaan yang tidak berkaitan ("Apa ibu kota
+    Jepang?", "Berapa jumlah chat hari ini?") di sesi yang pernah membahas
+    surat tetap dijawab dari isi surat itu — dan pertanyaan statistik tidak
+    pernah sampai ke SQL_QUERY.
+
+    Skor similarity TIDAK bisa memisahkan keduanya: diukur pada 21
+    pertanyaan, lanjutan serendah 0.136 ("apa mereknya?") sementara yang
+    tidak berkaitan setinggi 0.360. Jadi dipakai urutan berikut, diuji pada
+    38 pertanyaan (2 dokumen aktif) — 36/38 benar:
+      1. sapaan / pertanyaan tentang asisten      -> BARU (tanpa LLM)
+      2. kata penanda lanjutan atau akhiran -nya  -> LANJUT (tanpa LLM)
+      3. selain itu classifier LLM (~0,8 detik pada llama3.2:3b)
+    Dua yang masih salah: "Siapa saja yang diundang?" (dinilai BARU) dan
+    "Apa tugas bidang statistik?" setelah membahas surat (dinilai LANJUT).
+    Sempat dicoba menambahkan cuplikan isi dokumen ke prompt classifier —
+    akurasinya malah turun ke 23/38 (hampir semua dinilai BARU).
+    """
+    if not history:
+        return False
+    if SMALL_TALK.search(question) and not FOLLOW_UP_CUES.search(question):
+        return False
+    if FOLLOW_UP_CUES.search(question) or NYA_SUFFIX.search(question):
+        return True
+
+    prev_question = next((m["content"] for m in reversed(history) if m["role"] == "user"), "")
+    prev_answer = next((m["content"] for m in reversed(history) if m["role"] == "assistant"), "")
+    topic = Path(active_document).name if active_document else "percakapan umum"
+    response = await ask_llm(FOLLOW_UP_PROMPT.format(
+        topic=topic,
+        prev_question=prev_question[:300],
+        prev_answer=prev_answer[:400],
+        question=question,
+    ))
+    return response.strip().upper().startswith("LANJUT")
+
+
 async def _prepare_answer(
     question: str,
     db: Session,
     image_path: str = None,
     document_filename: str = None,
     active_document: str = None,
+    retrieval_query: str = None,
 ):
     """
     Tahap 1 dari agent: tentukan tool, jalankan tool, susun prompt jawaban
@@ -264,9 +314,10 @@ async def _prepare_answer(
     tidak dobel dan bisa diam-diam menyimpang antara kedua versi.
 
     `active_document` adalah dokumen yang terakhir dilampirkan di sesi ini
-    (bukan di pesan ini). Pertanyaan lanjutan tanpa lampiran tetap diarahkan
-    ke dokumen itu — kecuali pertanyaannya jelas pindah topik (lihat di
-    bawah) — supaya pengguna tidak perlu melampirkan ulang tiap bertanya.
+    (bukan di pesan ini) — hanya diisi pemanggil kalau _is_follow_up menilai
+    pertanyaan ini lanjutan, supaya pengguna tidak perlu melampirkan ulang
+    tiap bertanya. `retrieval_query` menggantikan `question` untuk pencarian
+    RAG (lihat run_agent_stream).
 
     Mengembalikan (tool_used_lower, sources, final_prompt) — final_prompt
     sudah siap dikirim ke LLM (streaming ataupun tidak) untuk jawaban akhir.
@@ -314,32 +365,13 @@ async def _prepare_answer(
         # pertanyaan yang memang terjawab dokumen, panggilan router hilang
         # sama sekali.
         tool_used = "RAG_SEARCH"
-        tool_result = await rag_search(question, db)
-
-        # Pertanyaan lanjutan di sesi yang sedang membahas sebuah dokumen.
-        # Tetap fokus ke dokumen itu, KECUALI pencarian umum menemukan
-        # jawaban di dokumen LAIN sementara dokumen aktif sendiri tidak
-        # relevan — tanda pengguna sudah pindah topik. Pertanyaan rujukan
-        # ("lanjutkan", "poin kedua maksudnya?") dikenali lewat
-        # FOLLOW_UP_CUES dan selalu tetap di dokumen aktif; riwayat
-        # percakapan yang memberi rujukannya.
-        switched_topic = False
-        if active_document and SMALL_TALK.search(question) and not FOLLOW_UP_CUES.search(question):
-            switched_topic = True
-        elif active_document and not FOLLOW_UP_CUES.search(question):
-            best = await _best_similarity_in_document(db, active_document, question)
-            switched_topic = (
-                tool_result["found"]
-                and active_document not in tool_result["sources"]
-                and best < SIMILARITY_THRESHOLD
-            )
-
-        if active_document and not switched_topic:
+        if active_document:
+            # Lanjutan percakapan tentang dokumen yang dilampirkan sebelumnya.
             tool_used = "IMAGE_OCR" if Path(active_document).suffix.lower() in IMAGE_EXTENSIONS else "DOCUMENT_FOCUS"
-            context = await _document_focus_context(db, active_document, question)
+            context = await _document_focus_context(db, active_document, retrieval_query or question)
             if context:
                 sources = [active_document]
-        elif tool_result["found"]:
+        elif (tool_result := await rag_search(retrieval_query or question, db))["found"]:
             context = tool_result["context"]
             sources = tool_result["sources"]
         else:
@@ -461,11 +493,12 @@ async def run_agent(
     """Versi non-streaming — dipertahankan untuk pengujian langsung/skrip
     diagnostik (lihat README, task.md). Endpoint /chat sekarang memakai
     run_agent_stream()."""
-    tool_used, sources, final_prompt = await _prepare_answer(
-        question, db, image_path, document_filename, active_document
-    )
-    answer = await ask_llm(final_prompt, system_prompt=SYSTEM_PROMPT, history=_trim_history(history))
-    return {"answer": answer, "tool_used": tool_used, "sources": sources}
+    events = [e async for e in run_agent_stream(
+        question, db, image_path, document_filename, history, active_document
+    )]
+    meta = events[0]
+    answer = "".join(e["text"] for e in events if e["type"] == "token")
+    return {"answer": answer, "tool_used": meta["tool_used"], "sources": meta["sources"]}
 
 
 async def run_agent_stream(
@@ -487,12 +520,30 @@ async def run_agent_stream(
     satu per potongan token dari Ollama.
 
     `history` = giliran percakapan sebelumnya di sesi ini (lihat /chat).
+    Pesan dengan lampiran baru selalu dianggap topik baru; selain itu
+    _is_follow_up yang memutuskan apakah riwayat & dokumen aktif dipakai.
+    Keputusannya ikut dikirim di event meta (`follow_up`) supaya frontend
+    bisa menandai jawaban yang melanjutkan percakapan.
     """
+    follow_up = False
+    if not (image_path or document_filename):
+        follow_up = await _is_follow_up(question, history, active_document)
+
+    retrieval_query = None
+    if follow_up:
+        # Pertanyaan lanjutan sering tidak berdiri sendiri ("syaratnya
+        # apa?"), jadi pencarian digabung dengan pertanyaan sebelumnya
+        # supaya embedding-nya membawa topik yang sedang dibahas.
+        prev_question = next((m["content"] for m in reversed(history) if m["role"] == "user"), "")
+        retrieval_query = f"{prev_question}\n{question}" if prev_question else None
+    else:
+        history, active_document = None, None
+
     tool_used, sources, final_prompt = await _prepare_answer(
-        question, db, image_path, document_filename, active_document
+        question, db, image_path, document_filename, active_document, retrieval_query
     )
 
-    yield {"type": "meta", "tool_used": tool_used, "sources": sources}
+    yield {"type": "meta", "tool_used": tool_used, "sources": sources, "follow_up": follow_up}
 
     async for token in stream_llm(final_prompt, system_prompt=SYSTEM_PROMPT, history=_trim_history(history)):
         yield {"type": "token", "text": token}

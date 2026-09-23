@@ -73,6 +73,7 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
             message: r.message,
             toolUsed: r.tool_used,
             sources: r.sources,
+            followUp: r.follow_up,
             attachment: r.attachment_type
               ? { type: r.attachment_type, filename: r.attachment_filename, previewUrl: null }
               : null,
@@ -147,6 +148,7 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
               message: '',
               toolUsed: meta.tool_used,
               sources: meta.sources,
+              followUp: meta.follow_up,
               streaming: true,
             },
           ])
@@ -379,6 +381,7 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
             sources={msg.sources}
             isStreaming={msg.streaming}
             attachment={msg.attachment}
+            followUp={msg.followUp}
           />
         ))}
 

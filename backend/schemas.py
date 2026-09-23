@@ -69,6 +69,7 @@ class ChatHistoryItem(BaseModel):
     sources: Optional[List[SourceInfo]] = None
     attachment_type: Optional[str] = None
     attachment_filename: Optional[str] = None
+    follow_up: Optional[bool] = None
 
     class Config:
         from_attributes = True

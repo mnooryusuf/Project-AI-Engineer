@@ -1,7 +1,7 @@
 // src/components/MessageBubble.jsx
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
-import { Bot, FileText, Image, Database, MessageSquare, Paperclip, Check } from 'lucide-react'
+import { Bot, FileText, Image, Database, MessageSquare, Paperclip, Check, CornerDownRight } from 'lucide-react'
 import Mascot from './Mascot'
 
 const TOOL_LABELS = {
@@ -72,7 +72,7 @@ function CopyButton({ text }) {
   )
 }
 
-export default function MessageBubble({ role, message, toolUsed, sources, isStreaming, attachment }) {
+export default function MessageBubble({ role, message, toolUsed, sources, isStreaming, attachment, followUp }) {
   const isUser = role === 'user'
   const tool = TOOL_LABELS[toolUsed] || null
 
@@ -118,13 +118,29 @@ export default function MessageBubble({ role, message, toolUsed, sources, isStre
       <Mascot size={34} className="flex-shrink-0 mt-0.5 drop-shadow-sm" />
       
       <div className="flex-1 min-w-0 flex flex-col gap-2 bg-[var(--overlay-1)] px-5 py-4 rounded-[20px] rounded-tl-[4px] border border-[var(--glass-border)] shadow-sm">
-        {tool && (
-          <span
-            className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md self-start"
-            style={{ background: tool.bg, color: tool.color, border: `1px solid ${tool.color}33` }}
-          >
-            <span className="text-sm">{tool.icon}</span> {tool.label}
-          </span>
+        {(tool || followUp) && (
+          <div className="flex flex-wrap items-center gap-2">
+            {tool && (
+              <span
+                className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md"
+                style={{ background: tool.bg, color: tool.color, border: `1px solid ${tool.color}33` }}
+              >
+                <span className="text-sm">{tool.icon}</span> {tool.label}
+              </span>
+            )}
+            {/* Penanda jawaban yang memakai riwayat percakapan (lihat
+                agent._is_follow_up) — supaya pengguna tahu kenapa jawabannya
+                merujuk ke dokumen/topik sebelumnya, atau justru tidak. */}
+            {followUp && (
+              <span
+                className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md"
+                style={{ background: 'var(--overlay-2)', color: 'var(--text-muted)' }}
+                title="Jawaban ini melanjutkan percakapan sebelumnya"
+              >
+                <CornerDownRight size={12} /> Lanjutan
+              </span>
+            )}
+          </div>
         )}
 
         <div

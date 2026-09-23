@@ -31,6 +31,9 @@ class ChatHistory(Base):
     # sedang dibahas di sesi ini, supaya pertanyaan lanjutan tetap fokus ke
     # dokumen itu tanpa melampirkan ulang.
     document_ref = Column(String(255), nullable=True)
+    # Jawaban asisten ini melanjutkan percakapan sebelumnya (riwayat & dokumen
+    # aktif dipakai) atau dijawab sebagai topik baru — lihat agent._is_follow_up.
+    follow_up = Column(Boolean, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 

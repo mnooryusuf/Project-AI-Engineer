@@ -49,7 +49,8 @@ with engine.begin() as conn:
             ADD COLUMN IF NOT EXISTS sources JSON,
             ADD COLUMN IF NOT EXISTS attachment_type VARCHAR(20),
             ADD COLUMN IF NOT EXISTS attachment_filename VARCHAR(255),
-            ADD COLUMN IF NOT EXISTS document_ref VARCHAR(255)
+            ADD COLUMN IF NOT EXISTS document_ref VARCHAR(255),
+            ADD COLUMN IF NOT EXISTS follow_up BOOLEAN
     """))
 
 # Pekerjaan yang masih "processing" saat proses ini mulai berarti backend mati
@@ -342,12 +343,16 @@ async def chat(
     ]
 
     # Dokumen yang terakhir dilampirkan di sesi ini — dipakai sebagai fokus
-    # pertanyaan lanjutan yang tidak membawa lampiran baru. Diabaikan kalau
-    # dokumennya sudah dihapus dari knowledge base.
+    # pertanyaan lanjutan yang tidak membawa lampiran baru. Kedaluwarsa begitu
+    # percakapan pindah topik: kalau setelah jawaban pertama atas lampiran itu
+    # ada jawaban yang dinilai topik BARU (follow_up = False), dokumen itu
+    # tidak lagi dibahas. Tanpa ini, "syaratnya apa saja?" setelah bertanya
+    # soal Media Center dijawab dari surat undangan yang dilampirkan jauh
+    # sebelumnya (diuji). Diabaikan juga kalau dokumennya sudah dihapus.
     active_document = None
     if not request.document_filename and not request.image_filename:
         last_doc = (
-            db.query(ChatHistory.document_ref)
+            db.query(ChatHistory.id, ChatHistory.document_ref)
             .filter(
                 ChatHistory.session_id == request.session_id,
                 ChatHistory.user_id == user_id,
@@ -356,8 +361,21 @@ async def chat(
             .order_by(ChatHistory.created_at.desc(), ChatHistory.id.desc())
             .first()
         )
-        if last_doc and db.query(Document.id).filter(Document.filename == last_doc.document_ref).first():
-            active_document = last_doc.document_ref
+        if last_doc:
+            later_answers = (
+                db.query(ChatHistory.follow_up)
+                .filter(
+                    ChatHistory.session_id == request.session_id,
+                    ChatHistory.user_id == user_id,
+                    ChatHistory.role == "assistant",
+                    ChatHistory.id > last_doc.id,
+                )
+                .order_by(ChatHistory.id)
+                .all()
+            )
+            topic_changed = any(a.follow_up is False for a in later_answers[1:])
+            if not topic_changed and db.query(Document.id).filter(Document.filename == last_doc.document_ref).first():
+                active_document = last_doc.document_ref
 
     # Simpan pesan user — ini masih aman pakai `db` dari Depends(get_db)
     # karena terjadi sebelum StreamingResponse dikembalikan (sinkron, bukan
@@ -405,6 +423,7 @@ async def chat(
         full_answer = ""
         meta_tool_used = None
         meta_sources = None
+        meta_follow_up = None
         try:
             async for event in run_agent_stream(
                 question=request.message, db=stream_db, image_path=image_path,
@@ -414,6 +433,7 @@ async def chat(
                 if event["type"] == "meta":
                     meta_tool_used = event.get("tool_used")
                     meta_sources = event.get("sources")
+                    meta_follow_up = event.get("follow_up")
                 elif event["type"] == "token":
                     full_answer += event["text"]
                 yield json.dumps(event) + "\n"
@@ -434,6 +454,7 @@ async def chat(
                     message=full_answer,
                     tool_used=meta_tool_used,
                     sources=meta_sources,
+                    follow_up=meta_follow_up,
                 ))
                 stream_db.commit()
             stream_db.close()
