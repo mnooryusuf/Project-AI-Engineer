@@ -135,15 +135,58 @@ async def extract_text_from_file(file_path: str) -> str:
         # boleh dipakai dengan nama yang sama.
         from docx import Document as DocxFile
         docx_file = DocxFile(file_path)
-        parts = [p.text for p in docx_file.paragraphs if p.text.strip()]
-        # Tabel tidak ikut kebaca lewat .paragraphs (API python-docx
-        # memisahkan keduanya) — banyak surat/KAK dinas menaruh info penting
-        # di tabel (nomor, tanggal, rincian anggaran), jadi ikut diekstrak.
-        for table in docx_file.tables:
-            for row in table.rows:
-                cells = [cell.text.strip() for cell in row.cells]
-                if any(cells):
-                    parts.append(" | ".join(cells))
+
+        def block_text(container) -> list[str]:
+            parts = [p.text for p in container.paragraphs if p.text.strip()]
+            # Tabel tidak ikut kebaca lewat .paragraphs (API python-docx
+            # memisahkan keduanya) — banyak surat/KAK dinas menaruh info
+            # penting di tabel (nomor, tanggal, rincian anggaran).
+            for table in container.tables:
+                for row in table.rows:
+                    cells = [cell.text.strip() for cell in row.cells]
+                    if any(cells):
+                        parts.append(" | ".join(cells))
+            return parts
+
+        # Kop surat ada di HEADER dokumen, bukan di badan teks — dulu tidak
+        # pernah terbaca, sehingga "alamat Diskominfo" pada SPT dijawab
+        # "tidak disebutkan" padahal kopnya jelas memuat "Jalan Aluh Idut
+        # No. 66A ..." (dalam tabel di header). Header/footer tiap section
+        # dibaca; yang ditautkan ke section sebelumnya dilewati supaya kop
+        # yang sama tidak terulang.
+        header, footer = [], []
+        for section in docx_file.sections:
+            for part, target in ((section.header, header), (section.first_page_header, header),
+                                 (section.footer, footer), (section.first_page_footer, footer)):
+                if part.is_linked_to_previous and target:
+                    continue
+                for line in block_text(part):
+                    if line not in target:
+                        target.append(line)
+
+        parts = header + block_text(docx_file) + footer
+
+        # Gambar di dalam DOCX (logo kop, stempel, tangkapan layar, spanduk
+        # footer) — dibaca dengan aturan yang sama seperti gambar di halaman
+        # PDF berteks: hanya dengan Apple Vision, dan hanya baris yang belum
+        # ada di teks dokumen.
+        from tools.ocr_tool import extract_text_from_image, uses_fast_ocr
+        if uses_fast_ocr():
+            import tempfile
+            import zipfile
+            teks_dokumen = "\n".join(parts)
+            with zipfile.ZipFile(file_path) as z, tempfile.TemporaryDirectory() as tmp:
+                for name in z.namelist():
+                    if not name.startswith("word/media/") or Path(name).suffix.lower() not in {".png", ".jpg", ".jpeg"}:
+                        continue
+                    path = os.path.join(tmp, Path(name).name)
+                    with open(path, "wb") as f:
+                        f.write(z.read(name))
+                    hasil = await extract_text_from_image(path)
+                    baru = _new_ocr_lines(hasil.get("text", ""), teks_dokumen) if hasil.get("success") else []
+                    if baru:
+                        parts.append("[Teks dalam gambar]\n" + "\n".join(baru))
+                        teks_dokumen += "\n" + "\n".join(baru)
         return "\n".join(parts)
 
     elif ext == ".xlsx":
