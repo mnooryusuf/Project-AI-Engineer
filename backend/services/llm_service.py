@@ -1,6 +1,6 @@
 """
 services/llm_service.py — Layanan LLM via Ollama
-Model: llama3.2:1b (ringan ~700MB, untuk RAM 8GB)
+Model: llama3.2:3b (~2GB; model 1b masih bisa dipakai lewat OLLAMA_LLM_MODEL)
 """
 import json
 
@@ -10,14 +10,27 @@ from config import get_settings
 settings = get_settings()
 
 
-async def ask_llm(prompt: str, system_prompt: str = "") -> str:
-    """
-    Kirim prompt ke Ollama dan dapatkan jawaban.
+def _build_messages(prompt: str, system_prompt: str, history: list[dict] | None) -> list[dict]:
+    """Susun daftar pesan untuk /api/chat Ollama.
+
+    `history` berisi giliran percakapan SEBELUMNYA ({"role": "user" |
+    "assistant", "content": ...}) — diselipkan di antara system prompt dan
+    prompt terbaru supaya model bisa menjawab pertanyaan lanjutan ("jelaskan
+    poin kedua", "lanjutkan") yang tanpa riwayat tidak punya rujukan apa pun.
     """
     messages = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
+    messages.extend(history or [])
     messages.append({"role": "user", "content": prompt})
+    return messages
+
+
+async def ask_llm(prompt: str, system_prompt: str = "", history: list[dict] | None = None) -> str:
+    """
+    Kirim prompt ke Ollama dan dapatkan jawaban.
+    """
+    messages = _build_messages(prompt, system_prompt, history)
 
     async with httpx.AsyncClient(timeout=120.0) as client:
         response = await client.post(
@@ -27,8 +40,7 @@ async def ask_llm(prompt: str, system_prompt: str = "") -> str:
                 "messages": messages,
                 "stream": False,
                 "options": {
-                    # Batasi konteks untuk hemat RAM
-                    "num_ctx": 2048,
+                    "num_ctx": settings.llm_num_ctx,
                     "temperature": 0.1,
                 },
             },
@@ -38,7 +50,7 @@ async def ask_llm(prompt: str, system_prompt: str = "") -> str:
         return data["message"]["content"]
 
 
-async def stream_llm(prompt: str, system_prompt: str = ""):
+async def stream_llm(prompt: str, system_prompt: str = "", history: list[dict] | None = None):
     """
     Versi streaming dari ask_llm() — yield potongan teks jawaban segera
     setelah Ollama menghasilkannya, alih-alih menunggu jawaban lengkap.
@@ -49,10 +61,7 @@ async def stream_llm(prompt: str, system_prompt: str = ""):
     demi token untuk keputusan internal yang tidak pernah ditampilkan
     langsung.
     """
-    messages = []
-    if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
-    messages.append({"role": "user", "content": prompt})
+    messages = _build_messages(prompt, system_prompt, history)
 
     async with httpx.AsyncClient(timeout=120.0) as client:
         async with client.stream(
@@ -63,7 +72,7 @@ async def stream_llm(prompt: str, system_prompt: str = ""):
                 "messages": messages,
                 "stream": True,
                 "options": {
-                    "num_ctx": 2048,
+                    "num_ctx": settings.llm_num_ctx,
                     "temperature": 0.1,
                 },
             },

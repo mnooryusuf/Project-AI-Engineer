@@ -25,6 +25,12 @@ class ChatHistory(Base):
     # Lampiran (gambar/dokumen) yang disertakan pesan user ini, kalau ada.
     attachment_type = Column(String(20), nullable=True)  # image | document
     attachment_filename = Column(String(255), nullable=True)
+    # Nama rujukan dokumen yang dilampirkan (kolom `filename` di tabel
+    # documents, lengkap dengan prefix uuid) — attachment_filename di atas
+    # hanya nama tampilan. Dipakai /chat untuk mengetahui dokumen mana yang
+    # sedang dibahas di sesi ini, supaya pertanyaan lanjutan tetap fokus ke
+    # dokumen itu tanpa melampirkan ulang.
+    document_ref = Column(String(255), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 

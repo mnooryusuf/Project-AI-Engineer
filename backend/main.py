@@ -28,7 +28,7 @@ from schemas import (
     UserCreate, UserResponse, Token, TokenData,
     ChatHistoryItem, ChatSessionItem, DocumentListItem,
 )
-from agent import run_agent_stream
+from agent import HISTORY_MAX_MESSAGES, run_agent_stream
 from services.document_service import process_and_store_document, store_text_as_document
 from services.llm_service import check_ollama_status
 from services.file_validation import verify_file_signature
@@ -48,7 +48,8 @@ with engine.begin() as conn:
             ADD COLUMN IF NOT EXISTS tool_used VARCHAR(50),
             ADD COLUMN IF NOT EXISTS sources JSON,
             ADD COLUMN IF NOT EXISTS attachment_type VARCHAR(20),
-            ADD COLUMN IF NOT EXISTS attachment_filename VARCHAR(255)
+            ADD COLUMN IF NOT EXISTS attachment_filename VARCHAR(255),
+            ADD COLUMN IF NOT EXISTS document_ref VARCHAR(255)
     """))
 
 # Pekerjaan yang masih "processing" saat proses ini mulai berarti backend mati
@@ -323,6 +324,41 @@ async def chat(
     # terputus tanpa event "done" di baris terakhir).
     user_id = current_user.id
 
+    # Riwayat percakapan sesi ini (SEBELUM pesan sekarang disimpan) — dikirim
+    # ke LLM supaya pertanyaan lanjutan punya rujukan. Difilter user_id sama
+    # seperti /chat/history. Diambil dari yang terbaru lalu dibalik; jumlah &
+    # panjangnya dipangkas lagi di agent._trim_history.
+    recent = (
+        db.query(ChatHistory.role, ChatHistory.message)
+        .filter(ChatHistory.session_id == request.session_id, ChatHistory.user_id == user_id)
+        .order_by(ChatHistory.created_at.desc(), ChatHistory.id.desc())
+        .limit(HISTORY_MAX_MESSAGES)
+        .all()
+    )
+    history = [
+        {"role": r.role, "content": r.message}
+        for r in reversed(recent)
+        if r.role in ("user", "assistant")
+    ]
+
+    # Dokumen yang terakhir dilampirkan di sesi ini — dipakai sebagai fokus
+    # pertanyaan lanjutan yang tidak membawa lampiran baru. Diabaikan kalau
+    # dokumennya sudah dihapus dari knowledge base.
+    active_document = None
+    if not request.document_filename and not request.image_filename:
+        last_doc = (
+            db.query(ChatHistory.document_ref)
+            .filter(
+                ChatHistory.session_id == request.session_id,
+                ChatHistory.user_id == user_id,
+                ChatHistory.document_ref.isnot(None),
+            )
+            .order_by(ChatHistory.created_at.desc(), ChatHistory.id.desc())
+            .first()
+        )
+        if last_doc and db.query(Document.id).filter(Document.filename == last_doc.document_ref).first():
+            active_document = last_doc.document_ref
+
     # Simpan pesan user — ini masih aman pakai `db` dari Depends(get_db)
     # karena terjadi sebelum StreamingResponse dikembalikan (sinkron, bukan
     # bagian dari body generator).
@@ -337,6 +373,7 @@ async def chat(
             _display_filename(request.image_filename or request.document_filename)
             if attachment_type else None
         ),
+        document_ref=request.document_filename,
     ))
     db.commit()
 
@@ -372,6 +409,7 @@ async def chat(
             async for event in run_agent_stream(
                 question=request.message, db=stream_db, image_path=image_path,
                 document_filename=document_filename,
+                history=history, active_document=active_document,
             ):
                 if event["type"] == "meta":
                     meta_tool_used = event.get("tool_used")
