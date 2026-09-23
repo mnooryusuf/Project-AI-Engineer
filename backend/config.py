@@ -29,12 +29,17 @@ class Settings(BaseSettings):
 
     # Ollama
     ollama_base_url: str = "http://localhost:11434"
-    ollama_llm_model: str = "llama3.2:1b"
+    # 3b, bukan 1b: diuji berdampingan pada analisis dokumen & percakapan
+    # lanjutan — 1b meringkas surat undangan jadi 1 kalimat, melewatkan 2 dari
+    # 11 penerima, mengarang jawaban saat informasi tidak ada di dokumen, dan
+    # salah menyebut harga termahal di berita acara survei harga. 3b benar di
+    # keempatnya, dengan harga jawaban 2-4x lebih lambat.
+    ollama_llm_model: str = "llama3.2:3b"
     # Jendela konteks LLM (token). 2048 terlalu sempit: dokumen yang
     # dilampirkan hanya muat ~1.800 karakter (6 chunk) sehingga analisis
     # dokumen selalu terpotong, dan tidak tersisa ruang untuk riwayat
-    # percakapan. Pada llama3.2:1b KV-cache 8192 token hanya ~256MB, masih
-    # aman untuk RAM 8GB. Harus
+    # percakapan. KV-cache 8192 token ~940MB pada llama3.2:3b (~256MB pada
+    # 1b) — masih muat di RAM 8GB bersama model embedding, tapi mepet. Harus
     # selaras dengan DOCUMENT_FOCUS_MAX_CHARS dan batas riwayat di agent.py.
     llm_num_ctx: int = 8192
     # paraphrase-multilingual (768 dimensi, ~560MB). Menggantikan all-minilm

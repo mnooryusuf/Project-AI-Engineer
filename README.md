@@ -9,7 +9,7 @@ AI Assistant lokal berbasis **Agentic RAG** dengan kemampuan membaca dokumen, ga
 | Frontend | ViteJS + React + TailwindCSS |
 | Backend | FastAPI + Python 3.12 |
 | Agent | Orkestrasi sendiri di `agent.py` (panggil Ollama via `httpx`) |
-| LLM | Ollama `llama3.2:1b` |
+| LLM | Ollama `llama3.2:3b` |
 | Embedding | Ollama `all-minilm` |
 | OCR | EasyOCR |
 | Database | PostgreSQL + pgvector |
@@ -35,7 +35,7 @@ cp .env.example .env
 docker compose up -d
 
 # Pull model Ollama (jika belum)
-ollama pull llama3.2:1b
+ollama pull llama3.2:3b
 ollama pull all-minilm
 
 # Setup backend
@@ -253,8 +253,8 @@ Diukur pada mesin pengembangan (Apple Silicon, 8GB RAM), model sudah termuat:
 
 ## 📊 Optimasi RAM 8GB
 
-- Model `llama3.2:1b` (1.3GB, bukan 3B versi penuh)
+- Model `llama3.2:3b` (~2GB di disk, ~2,6GB saat dimuat). Dipilih setelah diuji berdampingan dengan `llama3.2:1b`: 3b menjawab lengkap dan jujur saat informasi tidak ada di dokumen, sementara 1b sering meringkas terlalu pendek dan salah membaca tabel harga. Kekurangannya, jawaban 2-4x lebih lambat (5-32 detik). Kembali ke 1b cukup dengan `OLLAMA_LLM_MODEL=llama3.2:1b` di `.env`
 - Embedding `all-minilm` (45MB)
 - EasyOCR lazy loading (dimuat saat dibutuhkan)
 - PostgreSQL dibatasi 512MB via docker-compose
-- `num_ctx=2048` untuk hemat VRAM/RAM saat inference
+- `num_ctx=8192` (`LLM_NUM_CTX` di config.py) — cukup untuk dokumen lampiran ~12.000 karakter + riwayat percakapan; KV-cache ~940MB pada llama3.2:3b (~256MB pada 1b)

@@ -39,9 +39,9 @@ check_ollama() {
 
 check_models() {
   local models=$(ollama list 2>/dev/null)
-  if ! echo "$models" | grep -q "llama3.2:1b"; then
-    warn "Model llama3.2:1b belum ada. Mengunduh..."
-    ollama pull llama3.2:1b
+  if ! echo "$models" | grep -q "llama3.2:3b"; then
+    warn "Model llama3.2:3b belum ada. Mengunduh..."
+    ollama pull llama3.2:3b
   fi
   if ! echo "$models" | grep -q "all-minilm"; then
     warn "Model all-minilm belum ada. Mengunduh..."
