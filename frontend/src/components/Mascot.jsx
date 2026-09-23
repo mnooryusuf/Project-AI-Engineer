@@ -25,8 +25,8 @@ export default function Mascot({ className = '', size = 64 }) {
         <circle cx="50" cy="50" r="28" fill="rgba(6, 182, 212, 0.15)" stroke="url(#aiGradient)" strokeWidth="2" filter="url(#glow)" />
         
         {/* Eyes */}
-        <rect x="35" y="44" width="8" height="12" rx="4" fill="#fff" className="mascot-blink" filter="url(#glow)" />
-        <rect x="57" y="44" width="8" height="12" rx="4" fill="#fff" className="mascot-blink" filter="url(#glow)" />
+        <rect x="35" y="44" width="8" height="12" rx="4" fill="var(--text-primary)" className="mascot-blink" filter="url(#glow)" />
+        <rect x="57" y="44" width="8" height="12" rx="4" fill="var(--text-primary)" className="mascot-blink" filter="url(#glow)" />
         
         {/* Antenna */}
         <line x1="50" y1="22" x2="50" y2="8" stroke="url(#aiGradient)" strokeWidth="4" strokeLinecap="round" />

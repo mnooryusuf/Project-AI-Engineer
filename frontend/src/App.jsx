@@ -64,7 +64,7 @@ function LoginPage({ onLogin }) {
           <div className="absolute top-0 left-0 right-0 h-1" style={{ background: 'linear-gradient(90deg, var(--accent-cyan), var(--accent-purple))' }} />
           
           {/* Tab Switch */}
-          <div className="flex mb-8 p-1 rounded-2xl" style={{ background: 'rgba(0,0,0,0.2)', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)' }}>
+          <div className="flex mb-8 p-1 rounded-2xl" style={{ background: 'var(--overlay-1)', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)' }}>
             {['login', 'register'].map((m) => (
               <button
                 key={m}
@@ -72,7 +72,7 @@ function LoginPage({ onLogin }) {
                 className="flex-1 py-2.5 text-sm font-semibold transition-all duration-300 capitalize rounded-xl"
                 style={{
                   background: mode === m ? 'var(--overlay-3)' : 'transparent',
-                  color: mode === m ? '#fff' : 'var(--text-muted)',
+                  color: mode === m ? 'var(--text-primary)' : 'var(--text-muted)',
                   boxShadow: mode === m ? '0 4px 12px rgba(0,0,0,0.1)' : 'none'
                 }}
               >

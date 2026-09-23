@@ -97,7 +97,7 @@ export default function MessageBubble({ role, message, toolUsed, sources, isStre
           {attachment && !attachment.previewUrl && (
             <span
               className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg"
-              style={{ background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.85)' }}
+              style={{ background: 'var(--overlay-2)', color: 'var(--text-muted)' }}
             >
               {attachment.type === 'image' ? <Image size={13} /> : <FileText size={13} />} {attachment.filename}
             </span>
@@ -154,7 +154,7 @@ export default function MessageBubble({ role, message, toolUsed, sources, isStre
               <span
                 key={i}
                 className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-md transition-colors hover:bg-blue-500/20 cursor-default"
-                style={{ background: 'rgba(59,130,246,0.1)', color: '#93c5fd', border: '1px solid rgba(59,130,246,0.2)' }}
+                style={{ background: 'rgba(59,130,246,0.1)', color: 'var(--accent-blue)', border: '1px solid rgba(59,130,246,0.2)' }}
               >
                 <Paperclip size={12} /> <span className="opacity-90">{src.filename}</span>
               </span>

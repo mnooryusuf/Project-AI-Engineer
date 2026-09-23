@@ -15,6 +15,7 @@
   --accent-blue: #3b82f6;
   --accent-purple: #a855f7;   /* More vibrant purple */
   --accent-cyan: #06b6d4;
+  --accent-green: #10b981;    /* Green for status */
   --text-primary: #f8fafc;
   --text-muted: #94a3b8;
   --border: rgba(255, 255, 255, 0.08);
@@ -47,6 +48,7 @@
   --accent-blue: #2563eb;
   --accent-purple: #9333ea;
   --accent-cyan: #0891b2;
+  --accent-green: #059669;
   --text-primary: #0f172a;
   --text-muted: #64748b;
   --border: rgba(15, 23, 42, 0.08);
@@ -99,11 +101,11 @@ html, body, #root {
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: var(--overlay-3);
+  background: var(--overlay-2);
   border-radius: 8px;
   transition: background 0.3s;
 }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+::-webkit-scrollbar-thumb:hover { background: var(--overlay-3); }
 
 /* Premium Glassmorphism */
 .glass {

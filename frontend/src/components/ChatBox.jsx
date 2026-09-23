@@ -319,9 +319,9 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
 
         {/* Status Dots */}
         <div className="flex items-center gap-3 sm:gap-5">
-          <div className="hidden sm:flex items-center gap-2 bg-green-950/30 px-3 py-1.5 rounded-full border border-green-500/20">
-            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-            <span className="text-xs font-semibold text-green-400">Ollama</span>
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full border" style={{ background: 'rgba(16,185,129,0.1)', borderColor: 'rgba(16,185,129,0.2)' }}>
+            <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: 'var(--accent-green, #10b981)' }} />
+            <span className="text-xs font-semibold" style={{ color: 'var(--accent-green, #10b981)' }}>Ollama</span>
           </div>
           <button
             onClick={onLogout}
@@ -353,7 +353,7 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
                 <button
                   key={i}
                   onClick={() => setInput(item.text)}
-                  className="flex items-center gap-2 text-xs font-medium px-4 py-2.5 rounded-full transition-colors duration-200 hover:text-white"
+                  className="flex items-center gap-2 text-xs font-medium px-4 py-2.5 rounded-full transition-colors duration-200 hover:text-[var(--text-primary)] hover:bg-[var(--overlay-2)]"
                   style={{
                     background: 'var(--overlay-1)',
                     border: '1px solid var(--glass-border)',
@@ -422,7 +422,7 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
       {pendingAttachment && (
         <div
           className="mx-4 sm:mx-8 mb-3 flex items-center justify-between gap-3 px-4 py-3 rounded-2xl text-xs slide-up-fade shadow-lg backdrop-blur-md"
-          style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', color: '#93c5fd' }}
+          style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', color: 'var(--accent-blue)' }}
         >
           <div className="flex items-center gap-3 min-w-0">
             {pendingAttachment.type === 'image' && pendingAttachment.previewUrl ? (
@@ -439,7 +439,7 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
               </div>
             )}
             <span className="min-w-0 truncate">
-              <code className="bg-blue-900/30 px-1.5 py-0.5 rounded text-blue-200">{pendingAttachment.filename}</code>
+              <code className="bg-[var(--overlay-3)] px-1.5 py-0.5 rounded text-[var(--accent-blue)]">{pendingAttachment.filename}</code>
               {pendingAttachment.fileSize != null && (
                 <span className="opacity-70"> &middot; {formatBytes(pendingAttachment.fileSize)}</span>
               )}
@@ -496,14 +496,17 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
             id="send-btn"
             onClick={loading ? handleStop : handleSend}
             disabled={!loading && !input.trim() && !pendingAttachment}
-            className="w-12 h-12 mb-0.5 mr-0.5 rounded-[1.5rem] flex items-center justify-center transition-all duration-200 hover:brightness-110 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
-            style={{ background: 'linear-gradient(135deg, var(--accent-blue), var(--accent-purple))' }}
+            className="w-12 h-12 mb-0.5 mr-0.5 rounded-[1.5rem] flex items-center justify-center transition-all duration-200 hover:brightness-110 active:scale-95 disabled:cursor-not-allowed"
+            style={{ 
+              background: (!loading && !input.trim() && !pendingAttachment) ? 'var(--overlay-3)' : 'linear-gradient(135deg, var(--accent-blue), var(--accent-purple))',
+              color: (!loading && !input.trim() && !pendingAttachment) ? 'var(--text-muted)' : '#ffffff'
+            }}
             title={loading ? 'Hentikan jawaban' : 'Kirim'}
           >
             {loading ? (
-              <span className="w-3.5 h-3.5 rounded-[3px] bg-white" />
+              <span className="w-3.5 h-3.5 rounded-[3px] bg-current" />
             ) : (
-              <svg className="w-5 h-5 text-white transform translate-x-px" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-5 h-5 transform translate-x-px" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
               </svg>
             )}

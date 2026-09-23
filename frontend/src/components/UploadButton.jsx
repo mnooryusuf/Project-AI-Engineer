@@ -84,7 +84,7 @@ export default function UploadButton({ onJobStarted, onError, processing }) {
           busy ? 'px-3 h-10 gap-2' : 'w-10 h-10 hover:scale-105 active:scale-95'
         }`}
         style={{
-          background: busy ? 'rgba(139,92,246,0.3)' : 'var(--overlay-2)',
+          background: busy ? 'var(--overlay-3)' : 'var(--overlay-2)',
           border: '1px solid var(--glass-border)',
         }}
       >
@@ -101,14 +101,14 @@ export default function UploadButton({ onJobStarted, onError, processing }) {
                 jujur untuk kondisi yang memang tidak bisa diukur presisi. */}
             <svg className="animate-spin w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none">
               <circle cx="12" cy="12" r="10" stroke="var(--overlay-3)" strokeWidth="2"/>
-              <path d="M12 2a10 10 0 0 1 10 10" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round"/>
+              <path d="M12 2a10 10 0 0 1 10 10" stroke="var(--accent-purple)" strokeWidth="2" strokeLinecap="round"/>
             </svg>
-            <span className="text-xs font-medium whitespace-nowrap" style={{ color: '#c4b5fd' }}>
+            <span className="text-xs font-medium whitespace-nowrap" style={{ color: 'var(--accent-purple)' }}>
               {processing ? 'Memproses...' : 'Mengunggah...'}
             </span>
           </>
         ) : (
-          <Paperclip size={20} className="text-white drop-shadow-sm" />
+          <Paperclip size={20} className="drop-shadow-sm" style={{ color: 'var(--text-muted)' }} />
         )}
       </label>
     </>
