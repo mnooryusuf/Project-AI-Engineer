@@ -63,7 +63,7 @@ export const register = async (username, email, password) => {
 //   onToken(text)   -> setiap potongan token jawaban
 //   onDone()        -> sekali, setelah stream selesai normal
 // Melempar Error kalau request gagal total (network/HTTP non-2xx).
-export const sendMessageStream = async (sessionId, message, imageFilename, documentFilename, callbacks = {}, signal) => {
+export const sendMessageStream = async (sessionId, message, imageFilename, documentFilename, callbacks = {}, signal, model = 'local') => {
   const { onMeta, onToken, onDone } = callbacks
   const token = localStorage.getItem('access_token')
 
@@ -78,6 +78,7 @@ export const sendMessageStream = async (sessionId, message, imageFilename, docum
       message,
       image_filename: imageFilename,
       document_filename: documentFilename,
+      model,
     }),
     signal,
   })
@@ -189,6 +190,14 @@ export const getDocuments = async () => {
 
 export const deleteDocument = async (filename) => {
   const res = await api.delete(`/documents/${encodeURIComponent(filename)}`)
+  return res.data
+}
+
+// ── Model penulis jawaban ─────────────────────────────
+// [{ id, label, detail, external }] — Gemini hanya muncul kalau backend
+// punya GEMINI_API_KEY.
+export const getModels = async () => {
+  const res = await api.get('/models')
   return res.data
 }
 

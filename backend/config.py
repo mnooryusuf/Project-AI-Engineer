@@ -53,6 +53,16 @@ class Settings(BaseSettings):
     # Dimensi 768 harus cocok dengan Vector() di models.py.
     ollama_embedding_model: str = "paraphrase-multilingual"
 
+    # Gemini — model kedua yang bisa dipilih pengguna di UI (lihat
+    # services/gemini_service.py). Kosong = pilihan Gemini tidak ditampilkan.
+    # 3.6, bukan alias "gemini-flash-latest": saat diuji alias itu (juga 3.7
+    # dan 3.8) terus membalas 503 "high demand", sedangkan 3.6 — model yang
+    # disarankan Google sendiri di pesan error API — stabil. Cadangannya
+    # diatur di gemini_fallback_model.
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-3.6-flash"
+    gemini_fallback_model: str = "gemini-3.5-flash"
+
     # OCR: "auto" = Apple Vision di macOS (jauh lebih akurat & cepat, lihat
     # tools/ocr_tool.py), EasyOCR di tempat lain. "easyocr" memaksa EasyOCR.
     ocr_engine: str = "auto"

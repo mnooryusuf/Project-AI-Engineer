@@ -34,6 +34,9 @@ class ChatHistory(Base):
     # Jawaban asisten ini melanjutkan percakapan sebelumnya (riwayat & dokumen
     # aktif dipakai) atau dijawab sebagai topik baru — lihat agent._is_follow_up.
     follow_up = Column(Boolean, nullable=True)
+    # Model yang menulis jawaban asisten ini ("local" | "gemini") — jejak
+    # audit jawaban mana yang isinya pernah dikirim ke Google.
+    model = Column(String(20), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 

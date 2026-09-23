@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
 import UploadButton from './UploadButton'
-import { sendMessageStream, getChatHistory, waitForUploadJob } from '../services/api'
-import { Bot, FileText, Image as ImageIcon, Database, X, CheckCircle, AlertTriangle } from 'lucide-react'
+import { sendMessageStream, getChatHistory, waitForUploadJob, getModels } from '../services/api'
+import { Bot, FileText, Image as ImageIcon, Database, X, CheckCircle, AlertTriangle, Cpu, Sparkles } from 'lucide-react'
 import Mascot from './Mascot'
 
 // Prompt bawaan saat user melampirkan file lalu langsung menekan kirim
@@ -19,6 +19,13 @@ const DEFAULT_PROMPT = {
 const PENDING_UPLOAD_KEY = 'nanang_pending_upload'
 
 const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp']
+
+// Pilihan model disimpan per browser (kenyamanan pengguna, bukan data
+// penting) — dibungkus try/catch karena localStorage bisa diblokir.
+const MODEL_STORAGE_KEY = 'answer_model'
+const readSavedModel = () => {
+  try { return localStorage.getItem(MODEL_STORAGE_KEY) || 'local' } catch { return 'local' }
+}
 
 const formatBytes = (bytes) => {
   if (!bytes && bytes !== 0) return ''
@@ -41,6 +48,10 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
   // Server masih mengekstrak/OCR berkas yang diunggah — dipakai tombol upload
   // untuk menahan spinner dengan label "Memproses...".
   const [uploadProcessing, setUploadProcessing] = useState(false)
+  // Model penulis jawaban (lihat GET /models). Default lokal: isi percakapan
+  // hanya keluar dari server kalau pengguna sendiri memilih Gemini.
+  const [models, setModels] = useState([])
+  const [answerModel, setAnswerModel] = useState(readSavedModel)
 
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
@@ -74,6 +85,7 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
             toolUsed: r.tool_used,
             sources: r.sources,
             followUp: r.follow_up,
+            model: r.model,
             attachment: r.attachment_type
               ? { type: r.attachment_type, filename: r.attachment_filename, previewUrl: null }
               : null,
@@ -105,6 +117,22 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
     })
     textareaRef.current?.focus()
   }, [attachRequest])
+
+  useEffect(() => {
+    getModels()
+      .then((list) => {
+        setModels(list)
+        // Model tersimpan sudah tidak tersedia (mis. API key dicabut) ->
+        // kembali ke lokal, jangan mengirim pilihan yang pasti ditolak.
+        setAnswerModel((current) => (list.some((m) => m.id === current) ? current : 'local'))
+      })
+      .catch(() => setModels([]))
+  }, [])
+
+  const chooseModel = (id) => {
+    setAnswerModel(id)
+    try { localStorage.setItem(MODEL_STORAGE_KEY, id) } catch { /* abaikan */ }
+  }
 
   const notify = (msg, isError = false) => {
     if (isError) setError(msg)
@@ -165,6 +193,7 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
               toolUsed: meta.tool_used,
               sources: meta.sources,
               followUp: meta.follow_up,
+              model: meta.model,
               streaming: true,
             },
           ])
@@ -184,7 +213,7 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
           // "terakhir aktif" ikut ter-update tanpa harus refresh halaman.
           onMessageSent?.()
         },
-      }, controller.signal)
+      }, controller.signal, answerModel)
     } catch (err) {
       if (err.name === 'AbortError') {
         // Dihentikan lewat tombol Stop — bukan kegagalan, jangan tampilkan
@@ -398,6 +427,7 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
             isStreaming={msg.streaming}
             attachment={msg.attachment}
             followUp={msg.followUp}
+            model={msg.model}
           />
         ))}
 
@@ -560,7 +590,43 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
             )}
           </button>
         </div>
-        <div className="text-center mt-3">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          {models.length > 1 ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <div
+                role="radiogroup"
+                aria-label="Model penulis jawaban"
+                className="inline-flex p-0.5 rounded-full"
+                style={{ background: 'var(--overlay-2)' }}
+              >
+                {models.map((m) => {
+                  const active = m.id === answerModel
+                  return (
+                    <button
+                      key={m.id}
+                      id={`model-${m.id}`}
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => chooseModel(m.id)}
+                      disabled={loading}
+                      title={m.detail}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold transition-colors disabled:opacity-60"
+                      style={active
+                        ? { background: 'var(--bg-primary)', color: 'var(--text-primary)', boxShadow: '0 1px 2px rgba(0,0,0,0.2)' }
+                        : { color: 'var(--text-muted)' }}
+                    >
+                      {m.external ? <Sparkles size={12} /> : <Cpu size={12} />} {m.label}
+                    </button>
+                  )
+                })}
+              </div>
+              {models.find((m) => m.id === answerModel)?.external && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium" style={{ color: '#f59e0b' }}>
+                  <AlertTriangle size={12} /> Pertanyaan, riwayat &amp; kutipan dokumen dikirim ke Google
+                </span>
+              )}
+            </div>
+          ) : <span />}
           <p className="text-[10px] uppercase tracking-wider font-semibold opacity-40">Tekan Enter untuk mengirim &middot; Shift+Enter untuk baris baru</p>
         </div>
       </div>

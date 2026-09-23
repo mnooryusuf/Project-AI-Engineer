@@ -50,6 +50,9 @@ class ChatRequest(BaseModel):
     # baru saja upload dokumen dan langsung bertanya, mirip pola lampiran
     # file di ChatGPT/Gemini.
     document_filename: Optional[str] = None
+    # Penulis jawaban: "local" (Ollama, default) atau "gemini". Gemini hanya
+    # tersedia kalau GEMINI_API_KEY diisi — lihat GET /models.
+    model: str = "local"
 
 class SourceInfo(BaseModel):
     filename: str
@@ -70,6 +73,7 @@ class ChatHistoryItem(BaseModel):
     attachment_type: Optional[str] = None
     attachment_filename: Optional[str] = None
     follow_up: Optional[bool] = None
+    model: Optional[str] = None
 
     class Config:
         from_attributes = True

@@ -31,6 +31,7 @@ from schemas import (
 from agent import HISTORY_MAX_MESSAGES, find_mentioned_document, run_agent_stream
 from services.document_service import process_and_store_document, store_text_as_document
 from services.llm_service import check_ollama_status
+from services.gemini_service import gemini_available
 from services.file_validation import verify_file_signature
 from tools.ocr_tool import extract_text_from_image
 
@@ -50,7 +51,8 @@ with engine.begin() as conn:
             ADD COLUMN IF NOT EXISTS attachment_type VARCHAR(20),
             ADD COLUMN IF NOT EXISTS attachment_filename VARCHAR(255),
             ADD COLUMN IF NOT EXISTS document_ref VARCHAR(255),
-            ADD COLUMN IF NOT EXISTS follow_up BOOLEAN
+            ADD COLUMN IF NOT EXISTS follow_up BOOLEAN,
+            ADD COLUMN IF NOT EXISTS model VARCHAR(20)
     """))
 
 # Pekerjaan yang masih "processing" saat proses ini mulai berarti backend mati
@@ -325,6 +327,13 @@ async def chat(
     # terputus tanpa event "done" di baris terakhir).
     user_id = current_user.id
 
+    # Validasi pilihan model SEBELUM apa pun disimpan, supaya permintaan yang
+    # ditolak tidak meninggalkan pesan user tanpa jawaban di riwayat.
+    if request.model not in ("local", "gemini"):
+        raise HTTPException(status_code=400, detail="Model tidak dikenal. Pilih 'local' atau 'gemini'.")
+    if request.model == "gemini" and not gemini_available():
+        raise HTTPException(status_code=400, detail="Gemini belum dikonfigurasi (GEMINI_API_KEY kosong).")
+
     # Riwayat percakapan sesi ini (SEBELUM pesan sekarang disimpan) — dikirim
     # ke LLM supaya pertanyaan lanjutan punya rujukan. Difilter user_id sama
     # seperti /chat/history. Diambil dari yang terbaru lalu dibalik; jumlah &
@@ -438,6 +447,7 @@ async def chat(
                 question=request.message, db=stream_db, image_path=image_path,
                 document_filename=document_filename,
                 history=history, active_document=active_document, user_id=user_id,
+                model=request.model,
             ):
                 if event["type"] == "meta":
                     meta_tool_used = event.get("tool_used")
@@ -464,6 +474,7 @@ async def chat(
                     tool_used=meta_tool_used,
                     sources=meta_sources,
                     follow_up=meta_follow_up,
+                    model=request.model,
                 ))
                 stream_db.commit()
             stream_db.close()
@@ -804,6 +815,30 @@ def delete_document(
 
 
 # ── Health Check ─────────────────────────────────────────
+
+@app.get("/models", tags=["System"])
+def list_models(current_user: User = Depends(get_current_user)):
+    """
+    Model penulis jawaban yang bisa dipilih di UI. `external: true` berarti
+    isi prompt (pertanyaan, riwayat, kutipan dokumen) dikirim ke luar server
+    — frontend menampilkan peringatan untuk model seperti itu. API key tidak
+    pernah ikut dikirim ke frontend.
+    """
+    models = [{
+        "id": "local",
+        "label": "Lokal (Llama 3.2)",
+        "detail": settings.ollama_llm_model,
+        "external": False,
+    }]
+    if gemini_available():
+        models.append({
+            "id": "gemini",
+            "label": "Gemini Flash",
+            "detail": settings.gemini_model,
+            "external": True,
+        })
+    return models
+
 
 @app.get("/health", response_model=HealthResponse, tags=["System"])
 async def health_check(db: Session = Depends(get_db)):

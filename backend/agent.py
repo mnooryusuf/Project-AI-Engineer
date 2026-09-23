@@ -11,6 +11,7 @@ from models import Document
 from services.document_service import CHUNK_OVERLAP
 from services.embedding_service import get_embedding
 from services.llm_service import ask_llm, stream_llm
+from services.gemini_service import ask_gemini, stream_gemini
 from tools.rag_tool import rag_search
 from tools.ocr_tool import extract_text_from_image
 from tools.sql_tool import build_stats_query, is_stats_question, run_sql_query
@@ -358,6 +359,16 @@ def _trim_history(history: list[dict] | None) -> list[dict]:
     return trimmed
 
 
+# Model penulis jawaban akhir yang bisa dipilih pengguna di UI. Hanya
+# jawaban akhir (dan jawaban pengetahuan umum tambahannya) yang ditulis model
+# pilihan — pencarian dokumen, OCR, classifier lanjutan, dan SQL tetap lokal,
+# supaya yang dikirim ke Google sebatas prompt jawaban itu sendiri.
+ANSWER_MODELS = {
+    "local": (ask_llm, stream_llm),
+    "gemini": (ask_gemini, stream_gemini),
+}
+
+
 FOLLOW_UP_PROMPT = """Tentukan apakah pertanyaan baru masih melanjutkan topik percakapan sebelumnya.
 
 Topik sebelumnya: {topic}
@@ -651,12 +662,13 @@ async def run_agent(
     history: list[dict] | None = None,
     active_document: str = None,
     user_id: int | None = None,
+    model: str = "local",
 ) -> dict:
     """Versi non-streaming — dipertahankan untuk pengujian langsung/skrip
     diagnostik (lihat README, task.md). Endpoint /chat sekarang memakai
     run_agent_stream()."""
     events = [e async for e in run_agent_stream(
-        question, db, image_path, document_filename, history, active_document, user_id
+        question, db, image_path, document_filename, history, active_document, user_id, model
     )]
     meta = events[0]
     answer = "".join(e["text"] for e in events if e["type"] == "token")
@@ -671,6 +683,7 @@ async def run_agent_stream(
     history: list[dict] | None = None,
     active_document: str = None,
     user_id: int | None = None,
+    model: str = "local",
 ):
     """
     Versi streaming: yield event dict secara bertahap alih-alih menunggu
@@ -680,14 +693,18 @@ async def run_agent_stream(
     dikirim SEBELUM token jawaban mulai mengalir, supaya frontend bisa
     langsung tampilkan badge tool sementara teks jawaban masih ditulis
     token demi token setelahnya. Event berikutnya {"type": "token", "text": ...}
-    satu per potongan token dari Ollama.
+    satu per potongan token dari model penulis jawaban.
 
     `history` = giliran percakapan sebelumnya di sesi ini (lihat /chat).
     Pesan dengan lampiran baru selalu dianggap topik baru; selain itu
     _is_follow_up yang memutuskan apakah riwayat & dokumen aktif dipakai.
     Keputusannya ikut dikirim di event meta (`follow_up`) supaya frontend
     bisa menandai jawaban yang melanjutkan percakapan.
+
+    `model` memilih penulis jawaban akhir: "local" (Ollama) atau "gemini"
+    (lihat ANSWER_MODELS). Ikut dikirim di event meta.
     """
+    ask_answer, stream_answer = ANSWER_MODELS[model]
     follow_up = False
     if not (image_path or document_filename):
         follow_up = await _is_follow_up(question, history, active_document, db)
@@ -706,10 +723,10 @@ async def run_agent_stream(
         question, db, image_path, document_filename, active_document, retrieval_query, user_id
     )
 
-    yield {"type": "meta", "tool_used": tool_used, "sources": sources, "follow_up": follow_up}
+    yield {"type": "meta", "tool_used": tool_used, "sources": sources, "follow_up": follow_up, "model": model}
 
     answer = ""
-    async for token in stream_llm(final_prompt, system_prompt=SYSTEM_PROMPT, history=_trim_history(history)):
+    async for token in stream_answer(final_prompt, system_prompt=SYSTEM_PROMPT, history=_trim_history(history)):
         answer += token
         yield {"type": "token", "text": token}
 
@@ -719,7 +736,7 @@ async def run_agent_stream(
     # (data khusus dinas), tidak ada yang ditambahkan — pengguna tidak perlu
     # membaca dua penolakan berturut-turut.
     if tool_used in ("rag_search", "document_focus", "image_ocr") and not ANALYSIS_REQUEST.search(question) and _looks_not_found(answer):
-        general = await ask_llm(
+        general = await ask_answer(
             GENERAL_KNOWLEDGE_PROMPT.format(question=question),
             system_prompt=SYSTEM_PROMPT, history=_trim_history(history),
         )

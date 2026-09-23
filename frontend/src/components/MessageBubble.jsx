@@ -1,7 +1,7 @@
 // src/components/MessageBubble.jsx
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
-import { Bot, FileText, Image, Database, MessageSquare, Paperclip, Check, CornerDownRight } from 'lucide-react'
+import { Bot, FileText, Image, Database, MessageSquare, Paperclip, Check, CornerDownRight, Sparkles } from 'lucide-react'
 import Mascot from './Mascot'
 
 const TOOL_LABELS = {
@@ -72,7 +72,7 @@ function CopyButton({ text }) {
   )
 }
 
-export default function MessageBubble({ role, message, toolUsed, sources, isStreaming, attachment, followUp }) {
+export default function MessageBubble({ role, message, toolUsed, sources, isStreaming, attachment, followUp, model }) {
   const isUser = role === 'user'
   const tool = TOOL_LABELS[toolUsed] || null
 
@@ -118,7 +118,7 @@ export default function MessageBubble({ role, message, toolUsed, sources, isStre
       <Mascot size={34} className="flex-shrink-0 mt-0.5 drop-shadow-sm" />
       
       <div className="flex-1 min-w-0 flex flex-col gap-2 bg-[var(--overlay-1)] px-5 py-4 rounded-[20px] rounded-tl-[4px] border border-[var(--glass-border)] shadow-sm">
-        {(tool || followUp) && (
+        {(tool || followUp || model === 'gemini') && (
           <div className="flex flex-wrap items-center gap-2">
             {tool && (
               <span
@@ -138,6 +138,17 @@ export default function MessageBubble({ role, message, toolUsed, sources, isStre
                 title="Jawaban ini melanjutkan percakapan sebelumnya"
               >
                 <CornerDownRight size={12} /> Lanjutan
+              </span>
+            )}
+            {/* Jawaban yang ditulis model eksternal ditandai, supaya jelas
+                mana yang isinya pernah dikirim ke Google. */}
+            {model === 'gemini' && (
+              <span
+                className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md"
+                style={{ background: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.25)' }}
+                title="Jawaban ditulis Gemini Flash (Google)"
+              >
+                <Sparkles size={12} /> Gemini
               </span>
             )}
           </div>
