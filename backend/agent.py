@@ -104,6 +104,49 @@ Pertanyaan: {question}"""
 
 FALLBACK_HEADER = "\n\n---\n\n**Di luar dokumen** — jawaban dari pengetahuan umum model, mohon diverifikasi:\n\n"
 
+# Pertanyaan tentang data internal dinas (kepegawaian, pejabat, tarif,
+# anggaran, prosedur, jadwal). Kalau dokumen tidak memuat jawabannya,
+# pertanyaan ini dijawab dengan NOT_IN_DOCUMENTS_ANSWER oleh kode, TIDAK
+# diserahkan ke model. Pagar di GENERAL_KNOWLEDGE_PROMPT saja tidak cukup:
+# "Berapa hari cuti tahunan pegawai?" (tidak ada dokumen soal cuti, skor RAG
+# tertinggi 0.358) tetap dijawab "Pegawai Diskominfo ... mendapatkan cuti
+# tahunan 5 hari" oleh llama3.2:3b — karangan penuh yang terdengar resmi.
+INTERNAL_DATA = re.compile(
+    r"\b(pegawai|karyawan|asn|pns|pppk|honorer|cuti|gaji|tunjangan|lembur|absensi"
+    r"|kepala (dinas|bidang|seksi|bagian|sub ?bagian)|kadis|kabid|sekretaris dinas|pejabat|nip"
+    r"|retribusi|pagu|dipa|jam (kerja|kantor|pelayanan|operasional)|nomor surat|alamat kantor)\b",
+    re.IGNORECASE,
+)
+# Kata yang juga lazim di pertanyaan umum ("syarat membuat SIM", "biaya
+# kuliah") — hanya dihitung data internal kalau instansinya ikut disebut.
+INTERNAL_DATA_IF_AGENCY = re.compile(
+    r"\b(tarif|biaya|anggaran|sop|prosedur|persyaratan|syarat|jadwal|layanan)\b", re.IGNORECASE,
+)
+AGENCY = re.compile(
+    r"\b(dinas|diskominfo\w*|kominfo|kantor|pemkab|pemda|kabupaten|hss|hulu sungai selatan|media center)\b",
+    re.IGNORECASE,
+)
+# Pertanyaan definisi ("Apa itu SOP?", "Apa arti pagu?") tetap boleh dijawab
+# dari pengetahuan umum — jawabannya tidak bergantung pada data dinas.
+DEFINITION_QUESTION = re.compile(
+    r"^\s*(apa (itu|arti|artinya|maksud|pengertian|yang dimaksud)|jelaskan (apa itu|pengertian)|pengertian)\b",
+    re.IGNORECASE,
+)
+NOT_IN_DOCUMENTS_ANSWER = (
+    "Maaf, informasi tersebut belum ada di dokumen yang tersedia, jadi saya tidak bisa "
+    "memastikannya. Silakan tanyakan langsung ke Diskominfo SP Kabupaten Hulu Sungai Selatan, "
+    "atau unggah dokumen yang memuat informasi itu supaya bisa saya jawab."
+)
+
+
+def _asks_internal_data(question: str) -> bool:
+    if DEFINITION_QUESTION.search(question):
+        return False
+    return bool(
+        INTERNAL_DATA.search(question)
+        or (INTERNAL_DATA_IF_AGENCY.search(question) and AGENCY.search(question))
+    )
+
 
 def _looks_not_found(answer: str) -> bool:
     return len(answer.strip()) <= NOT_FOUND_MAX_CHARS and bool(NOT_FOUND.search(answer))
@@ -657,7 +700,14 @@ Pertanyaan: {prompt_question}"""
         sources = []
         # Sapaan & pertanyaan tentang asisten dikirim apa adanya — prompt
         # "tidak terjawab oleh dokumen" tidak cocok untuk "terima kasih".
-        final_prompt = question if SMALL_TALK.search(question) else GENERAL_KNOWLEDGE_PROMPT.format(question=question)
+        # Data internal dinas tanpa dokumen -> None: run_agent_stream
+        # mengirim NOT_IN_DOCUMENTS_ANSWER tanpa memanggil model.
+        if SMALL_TALK.search(question):
+            final_prompt = question
+        elif _asks_internal_data(question):
+            final_prompt = None
+        else:
+            final_prompt = GENERAL_KNOWLEDGE_PROMPT.format(question=question)
 
     return tool_used.lower(), [{"filename": s} for s in sources], final_prompt
 
@@ -736,6 +786,10 @@ async def run_agent_stream(
 
     yield {"type": "meta", "tool_used": tool_used, "sources": sources, "follow_up": follow_up, "model": model}
 
+    if final_prompt is None:
+        yield {"type": "token", "text": NOT_IN_DOCUMENTS_ANSWER}
+        return
+
     answer = ""
     async for token in stream_answer(final_prompt, system_prompt=SYSTEM_PROMPT, history=_trim_history(history)):
         answer += token
@@ -745,8 +799,14 @@ async def run_agent_stream(
     # pengetahuan model, ditandai jelas sebagai di luar dokumen. Dibuat
     # non-streaming supaya bisa diperiksa dulu: kalau model juga tidak tahu
     # (data khusus dinas), tidak ada yang ditambahkan — pengguna tidak perlu
-    # membaca dua penolakan berturut-turut.
-    if tool_used in ("rag_search", "document_focus", "image_ocr") and not ANALYSIS_REQUEST.search(question) and _looks_not_found(answer):
+    # membaca dua penolakan berturut-turut. Data internal dinas dilewati:
+    # jawaban "pengetahuan umum" untuk itu hanya bisa berupa tebakan.
+    if (
+        tool_used in ("rag_search", "document_focus", "image_ocr")
+        and not ANALYSIS_REQUEST.search(question)
+        and not _asks_internal_data(question)
+        and _looks_not_found(answer)
+    ):
         general = await ask_answer(
             GENERAL_KNOWLEDGE_PROMPT.format(question=question),
             system_prompt=SYSTEM_PROMPT, history=_trim_history(history),
