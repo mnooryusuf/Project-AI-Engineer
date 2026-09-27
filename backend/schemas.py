@@ -14,6 +14,9 @@ class UserCreate(BaseModel):
     username: str
     email: EmailStr
     password: str
+    # Persetujuan pemberitahuan privasi di form Daftar (UU PDP). Wajib True;
+    # waktunya dicatat di users.privacy_accepted_at sebagai bukti persetujuan.
+    accept_privacy: bool = False
 
 class UserResponse(BaseModel):
     id: int

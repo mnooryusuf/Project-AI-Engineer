@@ -50,6 +50,22 @@ npm install
 cd ..
 ```
 
+### Ganti password bawaan
+
+`.env.example`, `docker-compose.yml`, dan `init.sql` memakai password contoh.
+Setelah database pertama kali dibuat, ganti keduanya lalu samakan `.env`
+(`POSTGRES_PASSWORD`, `DATABASE_URL`, `DATABASE_URL_READONLY`):
+
+```bash
+docker exec -i agentic-rag-db psql -U postgres -d agentic_rag <<'SQL'
+ALTER ROLE postgres WITH PASSWORD '<password-baru>';
+ALTER ROLE agentic_rag_readonly WITH PASSWORD '<password-baru-lain>';
+SQL
+```
+
+Ganti juga `SECRET_KEY` (`python3 -c "import secrets; print(secrets.token_urlsafe(48))"`).
+Di luar `APP_ENV=development` backend menolak start kalau salah satunya masih nilai contoh.
+
 ### Akun admin pertama
 
 Pendaftaran lewat aplikasi selalu menghasilkan akun `read_only` (bisa
@@ -162,7 +178,31 @@ biasa, tetap dipakai untuk pertanyaan susulan lintas-dokumen).
   nyata** dengan dokumen berisi instruksi tersembunyi gaya "developer
   mode" yang sempat terbukti berhasil membajak jawaban sebelum perbaikan
   ini (lihat § Catatan Teknis).
-- `.env` tidak masuk Git.
+- `.env` tidak masuk Git. **`SECRET_KEY`, password `postgres`, dan password
+  `agentic_rag_readonly` wajib diganti** dari nilai contoh — di luar
+  `APP_ENV=development` backend menolak start kalau masih nilai contoh
+  (`config._check_secrets`); di development hanya muncul peringatan.
+- **Pelindungan data pribadi (UU PDP)**: pendaftaran wajib menyetujui
+  pemberitahuan privasi (waktunya dicatat di `users.privacy_accepted_at`);
+  unggahan pertama di tiap browser menampilkan pengingat agar tidak
+  mengunggah data pribadi yang tidak perlu. Riwayat chat > 90 hari dan
+  catatan login gagal > 30 hari dihapus otomatis tiap 24 jam
+  (`CHAT_RETENTION_DAYS`, `LOGIN_ATTEMPT_RETENTION_DAYS`; 0 = nonaktif).
+  Akun uji/lama dinonaktifkan dengan `manage_users.py set-active <username> no`.
+
+## 🧪 Test
+
+```bash
+cd backend
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python -m pytest
+```
+
+Test di `backend/tests/` menguji aturan yang sengaja ditangani kode, bukan
+prompt: pagar data internal dinas, jawaban identitas, pengenal pertanyaan
+statistik, validasi SQL dan file, pemeriksaan rahasia, dan pencocokan file
+unggahan. Tidak butuh Ollama maupun database. Alur end-to-end (register →
+login → chat → upload) diuji terpisah lewat skrip smoke.
 
 ## ⚠️ Catatan Teknis Penting
 

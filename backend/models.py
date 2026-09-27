@@ -111,4 +111,7 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     role = Column(String(20), default="user")  # admin | user | read_only
     is_active = Column(Boolean, default=True)
+    # Kapan pemberitahuan privasi disetujui saat mendaftar. Kosong untuk akun
+    # yang dibuat sebelum persetujuan diwajibkan atau lewat manage_users.py.
+    privacy_accepted_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

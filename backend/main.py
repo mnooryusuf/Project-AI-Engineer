@@ -55,6 +55,7 @@ with engine.begin() as conn:
             ADD COLUMN IF NOT EXISTS follow_up BOOLEAN,
             ADD COLUMN IF NOT EXISTS model VARCHAR(20)
     """))
+    conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_accepted_at TIMESTAMPTZ"))
 
 # Pekerjaan yang masih "processing" saat proses ini mulai berarti backend mati
 # di tengah pemrosesan sebelumnya — BackgroundTasks hidup di dalam proses, jadi
@@ -84,6 +85,46 @@ app = FastAPI(
     description="Asisten AI lokal Diskominfo SP TIK HSS — RAG dokumen, OCR gambar, dan query database.",
     version="1.0.0",
 )
+
+RETENTION_INTERVAL_SECONDS = 24 * 60 * 60
+
+
+def purge_expired_data() -> dict[str, int]:
+    """Hapus riwayat chat dan catatan login gagal yang melewati masa retensi
+    (settings.chat_retention_days / login_attempt_retention_days)."""
+    targets = [
+        ("chat_history", settings.chat_retention_days),
+        ("login_attempts", settings.login_attempt_retention_days),
+    ]
+    deleted = {}
+    with engine.begin() as conn:
+        for table, days in targets:
+            if days > 0:
+                result = conn.execute(
+                    text(f"DELETE FROM {table} WHERE created_at < NOW() - make_interval(days => :days)"),
+                    {"days": days},
+                )
+                deleted[table] = result.rowcount
+    return deleted
+
+
+async def _retention_loop() -> None:
+    while True:
+        try:
+            deleted = await asyncio.to_thread(purge_expired_data)
+            if any(deleted.values()):
+                print(f"Retensi data: {deleted}")
+        except Exception as e:
+            # Kegagalan retensi tidak boleh menjatuhkan backend; dicoba lagi
+            # pada putaran berikutnya.
+            print(f"Retensi data gagal: {e}")
+        await asyncio.sleep(RETENTION_INTERVAL_SECONDS)
+
+
+@app.on_event("startup")
+async def _start_retention() -> None:
+    asyncio.create_task(_retention_loop())
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -206,6 +247,8 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
     mengunggah ke knowledge base yang dibaca semua pengguna. Admin menaikkan
     role lewat `manage_users.py set-role`.
     """
+    if not user_data.accept_privacy:
+        raise HTTPException(status_code=400, detail="Anda harus menyetujui pemberitahuan privasi untuk mendaftar.")
     if db.query(User).filter(User.username == user_data.username).first():
         raise HTTPException(status_code=400, detail="Username sudah digunakan.")
     user = User(
@@ -213,6 +256,7 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
         email=user_data.email,
         hashed_password=get_password_hash(user_data.password),
         role="read_only",
+        privacy_accepted_at=datetime.now(timezone.utc),
     )
     db.add(user)
     db.commit()

@@ -1,6 +1,7 @@
 """
 config.py — Konfigurasi aplikasi dari .env
 """
+import sys
 from pathlib import Path
 
 from pydantic_settings import BaseSettings
@@ -10,6 +11,13 @@ from functools import lru_cache
 # sini supaya konfigurasi tidak berubah-ubah mengikuti direktori kerja.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
+# Nilai contoh yang tercantum terbuka di .env.example, init.sql, dan
+# docker-compose.yml. SECRET_KEY contoh berarti siapa pun yang membaca repo
+# bisa membuat token JWT untuk akun mana saja, termasuk admin.
+EXAMPLE_SECRET_KEY = "ganti-dengan-secret-key-yang-kuat-minimal-32-karakter"
+EXAMPLE_DB_PASSWORDS = ("mysecretpassword", "readonly_agent_pw_2026")
+MIN_SECRET_KEY_LENGTH = 32
+
 
 class Settings(BaseSettings):
     # App
@@ -17,6 +25,10 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = "postgresql://postgres:mysecretpassword@localhost:5432/agentic_rag"
+    # Hanya dibaca docker-compose.yml saat volume database pertama kali dibuat;
+    # aplikasi memakai database_url. Dideklarasikan supaya .env yang sama
+    # bisa dipakai keduanya (Settings menolak variabel yang tidak dikenal).
+    postgres_password: str = ""
 
     # Koneksi terpisah untuk SQL_QUERY tool — role PostgreSQL yang secara
     # fisik hanya punya GRANT SELECT pada chat_history & documents (lihat
@@ -75,9 +87,15 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
 
     # JWT Auth
-    secret_key: str = "ganti-dengan-secret-key-yang-kuat-minimal-32-karakter"
+    secret_key: str = EXAMPLE_SECRET_KEY
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
+
+    # Retensi data (UU PDP, pembatasan penyimpanan). Riwayat chat dan catatan
+    # login gagal yang lebih tua dari batas ini dihapus otomatis saat backend
+    # start lalu tiap 24 jam. 0 = tidak pernah dihapus.
+    chat_retention_days: int = 90
+    login_attempt_retention_days: int = 30
 
     class Config:
         # Path absolut, bukan ".env": uvicorn dijalankan dari dalam backend/
@@ -98,4 +116,22 @@ def get_settings() -> Settings:
         if not value.is_absolute():
             setattr(settings, field, str((PROJECT_ROOT / value).resolve()))
 
+    _check_secrets(settings)
     return settings
+
+
+def _check_secrets(settings: Settings) -> None:
+    """Tolak jalan di luar development kalau rahasia masih nilai contoh;
+    di development cukup peringatan supaya instalasi lokal tetap mudah."""
+    problems = []
+    if settings.secret_key == EXAMPLE_SECRET_KEY or len(settings.secret_key) < MIN_SECRET_KEY_LENGTH:
+        problems.append(f"SECRET_KEY masih nilai contoh atau kurang dari {MIN_SECRET_KEY_LENGTH} karakter")
+    for url_field in ("database_url", "database_url_readonly"):
+        if any(f":{pw}@" in getattr(settings, url_field) for pw in EXAMPLE_DB_PASSWORDS):
+            problems.append(f"{url_field.upper()} masih memakai password contoh")
+    if not problems:
+        return
+    message = "Konfigurasi tidak aman: " + "; ".join(problems) + ". Ganti di .env (lihat README)."
+    if settings.app_env != "development":
+        raise RuntimeError(message)
+    print(f"PERINGATAN: {message}", file=sys.stderr)

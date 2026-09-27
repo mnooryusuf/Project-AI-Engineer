@@ -5,7 +5,9 @@ services:
     environment:
       POSTGRES_DB: agentic_rag
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: mysecretpassword
+      # Dibaca dari .env di root project (docker compose memuatnya otomatis).
+      # Nilai cadangan hanya untuk instalasi lokal pertama — ganti di .env.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mysecretpassword}
     ports:
       - "5432:5432"
     volumes:

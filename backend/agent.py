@@ -48,6 +48,26 @@ SMALL_TALK = re.compile(
     re.IGNORECASE,
 )
 
+# Pertanyaan tentang identitas asisten dijawab oleh kode. Model tidak
+# konsisten menyebut namanya: pada uji laporan akhir (27 Sep 2026) "Siapa
+# kamu?" dijawab "asisten AI Diskominfo SP HSS" tanpa nama Nanang, padahal
+# pengujian prompt sebelumnya 3/3 menyebutnya. Memperkuat SYSTEM_PROMPT tidak
+# dipilih: aturan identitas yang lebih tegas terbukti merusak ringkasan
+# dokumen (lihat catatan di SYSTEM_PROMPT). Dibatasi pada pesan pendek supaya
+# "siapa kamu? lalu ringkas dokumen ini" tetap diproses seperti biasa.
+IDENTITY_QUESTION = re.compile(
+    r"\b(siapa (kamu|anda|namamu)|kamu siapa|anda siapa|siapa nama (kamu|anda)"
+    r"|nama (kamu|anda) siapa|namamu siapa|perkenalkan (dirimu|diri kamu|diri anda))\b",
+    re.IGNORECASE,
+)
+IDENTITY_MAX_CHARS = 80
+IDENTITY_ANSWER = (
+    "Saya **Nanang**, asisten AI Dinas Komunikasi, Informatika, Statistik dan Persandian "
+    "Kabupaten Hulu Sungai Selatan yang berjalan lokal di server dinas. Saya bisa menjawab "
+    "pertanyaan dari dokumen dinas beserta sumbernya, meringkas dokumen atau gambar yang Anda "
+    "lampirkan, dan menjawab statistik pemakaian aplikasi ini."
+)
+
 # Permintaan ringkasan/analisis dokumen. Untuk pertanyaan jenis ini system
 # prompt "singkat dan jelas" membuat llama3.2:1b menjawab SATU kalimat saja
 # (ringkasan surat undangan 4.400 karakter dijawab 1 kalimat tanpa waktu,
@@ -122,6 +142,10 @@ NOT_IN_DOCUMENTS_ANSWER = (
     "memastikannya. Silakan tanyakan langsung ke Diskominfo SP Kabupaten Hulu Sungai Selatan, "
     "atau unggah dokumen yang memuat informasi itu supaya bisa saya jawab."
 )
+
+
+class FixedAnswer(str):
+    """Jawaban baku yang dikirim apa adanya, bukan prompt untuk model."""
 
 
 def _asks_internal_data(question: str) -> bool:
@@ -395,6 +419,8 @@ async def _prepare_answer(
 
     Mengembalikan (tool_used_lower, sources, final_prompt) — final_prompt
     sudah siap dikirim ke LLM (streaming ataupun tidak) untuk jawaban akhir.
+    Kalau final_prompt berupa FixedAnswer, teks itulah jawabannya dan model
+    tidak dipanggil sama sekali.
     """
     context = ""
     sources = []
@@ -558,14 +584,16 @@ Pertanyaan: {prompt_question}"""
         # menjadi sitasi palsu, karena jawabannya tidak berasal dari dokumen.
         tool_used = "DIRECT_ANSWER"
         sources = []
-        # Sapaan & pertanyaan tentang asisten dikirim apa adanya — prompt
-        # "tidak terjawab oleh dokumen" tidak cocok untuk "terima kasih".
-        # Data internal dinas tanpa dokumen -> None: run_agent_stream
-        # mengirim NOT_IN_DOCUMENTS_ANSWER tanpa memanggil model.
-        if SMALL_TALK.search(question):
+        # Sapaan dikirim apa adanya — prompt "tidak terjawab oleh dokumen"
+        # tidak cocok untuk "terima kasih". Identitas asisten dan data
+        # internal dinas tanpa dokumen dijawab kalimat baku (FixedAnswer)
+        # tanpa memanggil model.
+        if IDENTITY_QUESTION.search(question) and len(question.strip()) <= IDENTITY_MAX_CHARS:
+            final_prompt = FixedAnswer(IDENTITY_ANSWER)
+        elif SMALL_TALK.search(question):
             final_prompt = question
         elif _asks_internal_data(question):
-            final_prompt = None
+            final_prompt = FixedAnswer(NOT_IN_DOCUMENTS_ANSWER)
         else:
             final_prompt = GENERAL_KNOWLEDGE_PROMPT.format(question=question)
 
@@ -644,8 +672,8 @@ async def run_agent_stream(
 
     yield {"type": "meta", "tool_used": tool_used, "sources": sources, "follow_up": follow_up, "model": model}
 
-    if final_prompt is None:
-        yield {"type": "token", "text": NOT_IN_DOCUMENTS_ANSWER}
+    if isinstance(final_prompt, FixedAnswer):
+        yield {"type": "token", "text": str(final_prompt)}
         return
 
     answer = ""

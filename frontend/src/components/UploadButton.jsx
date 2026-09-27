@@ -17,6 +17,27 @@ const ALLOWED_EXT = '.pdf, .txt, .docx, .xlsx, .png, .jpg, .jpeg, .webp'
 // (ekstensi + magic bytes) jadi ini tidak melonggarkan keamanan.
 const ALLOWED_EXT_LIST = ALLOWED_EXT.split(',').map((e) => e.trim())
 
+// Pengingat data pribadi (UU PDP) sebelum unggahan pertama di browser ini —
+// dokumen masuk knowledge base bersama yang bisa dicari semua pengguna.
+const UPLOAD_NOTICE_KEY = 'upload_privacy_notice_seen'
+const UPLOAD_NOTICE =
+  'Dokumen yang diunggah masuk knowledge base bersama dan bisa dicari semua pengguna.\n\n' +
+  'Jangan unggah data pribadi yang tidak perlu (KTP, NIK, nomor rekening, data kesehatan). ' +
+  'Lanjutkan mengunggah?'
+
+function confirmUploadNotice() {
+  try {
+    if (localStorage.getItem(UPLOAD_NOTICE_KEY)) return true
+  } catch {
+    // localStorage tidak tersedia — tetap tampilkan pengingat
+  }
+  const ok = window.confirm(UPLOAD_NOTICE)
+  if (ok) {
+    try { localStorage.setItem(UPLOAD_NOTICE_KEY, '1') } catch { /* abaikan */ }
+  }
+  return ok
+}
+
 // `processing` datang dari ChatBox, yang memantau pekerjaan sampai selesai —
 // pemantauan tidak ditaruh di sini karena harus tetap berjalan (dan bisa
 // dilanjutkan setelah halaman dimuat ulang) terlepas dari tombol ini.
@@ -36,6 +57,10 @@ export default function UploadButton({ onJobStarted, onError, processing }) {
     }
     if (file.size > 10 * 1024 * 1024) {
       onError?.('Ukuran file melebihi 10MB.')
+      return
+    }
+    if (!confirmUploadNotice()) {
+      if (inputRef.current) inputRef.current.value = ''
       return
     }
 

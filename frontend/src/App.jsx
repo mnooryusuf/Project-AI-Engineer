@@ -1,5 +1,5 @@
 // src/App.jsx — Root Application dengan Auth flow (Premium UI)
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Bot, Loader2, AlertTriangle, Eye, EyeOff } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
 import ChatBox from './components/ChatBox'
@@ -14,6 +14,7 @@ function LoginPage({ onLogin }) {
   const [email, setEmail]     = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [acceptPrivacy, setAcceptPrivacy] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
 
@@ -23,7 +24,7 @@ function LoginPage({ onLogin }) {
     setLoading(true)
     try {
       if (mode === 'register') {
-        await register(username, email, password)
+        await register(username, email, password, acceptPrivacy)
         setMode('login')
         setError('') 
         alert('Registrasi berhasil! Silakan login.\n\nAkun baru bisa langsung bertanya. Untuk mengunggah dokumen, minta izin ke admin Diskominfo.')
@@ -153,6 +154,24 @@ function LoginPage({ onLogin }) {
               </div>
             </div>
 
+            {/* Pemberitahuan privasi (UU PDP) — wajib disetujui saat mendaftar */}
+            {mode === 'register' && (
+              <div className="text-xs px-4 py-3 rounded-xl flex flex-col gap-2" style={{ background: 'var(--overlay-1)', color: 'var(--text-muted)', border: '1px solid var(--glass-border)' }}>
+                <p>Data yang Anda kirim (pertanyaan, riwayat chat, dan dokumen yang diunggah) diproses di server Diskominfo SP TIK HSS untuk menjawab pertanyaan. Dokumen yang diunggah masuk knowledge base bersama dan bisa dicari semua pengguna, jadi jangan unggah data pribadi yang tidak perlu (KTP, NIK, nomor rekening). Bila Anda memilih Gemini, pertanyaan dan kutipan dokumen dikirim ke Google.</p>
+                <label className="flex items-start gap-2 cursor-pointer" style={{ color: 'var(--text-primary)' }}>
+                  <input
+                    id="privacy-checkbox"
+                    type="checkbox"
+                    checked={acceptPrivacy}
+                    onChange={(e) => setAcceptPrivacy(e.target.checked)}
+                    required
+                    className="mt-0.5"
+                  />
+                  <span>Saya sudah membaca dan menyetujui pemberitahuan privasi ini.</span>
+                </label>
+              </div>
+            )}
+
             {/* Error */}
             {error && (
               <div className="text-xs px-4 py-3 rounded-xl slide-up-fade flex items-center gap-2" style={{ background: 'rgba(239,68,68,0.1)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.2)' }}>
@@ -212,10 +231,19 @@ export default function App() {
     if (token) setIsAuthenticated(true)
   }, [])
 
+  // Percakapan terakhir hanya dipilih otomatis SEKALI setelah login, dan
+  // hanya selama pengguna belum memilih sendiri. loadSessions juga dipanggil
+  // setelah setiap pesan; sebelumnya ia selalu memilih ulang, sehingga klik
+  // "Percakapan Baru" sebelum daftar awal selesai dimuat ditimpa sesi lama
+  // dan jawaban pesan baru tampil di percakapan yang salah (terlihat di uji DOM).
+  const autoSelectRef = useRef(true)
+
   const loadSessions = useCallback(async () => {
     try {
       const data = await getChatSessions()
       setSessions(data)
+      if (!autoSelectRef.current) return
+      autoSelectRef.current = false
       // Buka percakapan terakhir yang aktif (bukan langsung mulai kosong)
       // kalau memang ada riwayat — mirip perilaku ChatGPT/Gemini saat dibuka.
       const savedId = localStorage.getItem('last_session_id')
@@ -248,14 +276,17 @@ export default function App() {
     setIsAuthenticated(false)
     setSessions([])
     setRole(null)
+    autoSelectRef.current = true
   }
 
   const handleNewChat = () => {
+    autoSelectRef.current = false
     setSessionId(uuidv4())
     setSidebarOpen(false)
   }
 
   const handleSelectSession = (id) => {
+    autoSelectRef.current = false
     setSessionId(id)
     setSidebarOpen(false)
   }

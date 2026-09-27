@@ -14,6 +14,7 @@ Jalankan dari direktori backend/:
     .venv/bin/python3 manage_users.py list
     .venv/bin/python3 manage_users.py create-admin <username> <email>   # password ditanya
     .venv/bin/python3 manage_users.py set-role <username> <admin|user|read_only>
+    .venv/bin/python3 manage_users.py set-active <username> <yes|no>    # nonaktifkan akun uji/lama
 """
 import getpass
 import sys
@@ -68,11 +69,26 @@ def set_role(db, username: str, role: str) -> int:
     return 0
 
 
+def set_active(db, username: str, value: str) -> int:
+    if value not in ("yes", "no"):
+        print("Nilai harus yes atau no.")
+        return 1
+    user = db.query(User).filter(User.username == username).first()
+    if user is None:
+        print(f"Akun '{username}' tidak ditemukan.")
+        return 1
+    user.is_active = value == "yes"
+    db.commit()
+    print(f"{username}: {'aktif' if user.is_active else 'nonaktif'}")
+    return 0
+
+
 def main(argv: list[str]) -> int:
     commands = {
         "list": (list_users, 0),
         "create-admin": (create_admin, 2),
         "set-role": (set_role, 2),
+        "set-active": (set_active, 2),
     }
     if not argv or argv[0] not in commands or len(argv) - 1 != commands[argv[0]][1]:
         print(__doc__)

@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS users (
     hashed_password VARCHAR(255) NOT NULL,
     role VARCHAR(20) DEFAULT 'read_only' CHECK (role IN ('admin', 'user', 'read_only')),
     is_active BOOLEAN DEFAULT TRUE,
+    privacy_accepted_at TIMESTAMPTZ,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
