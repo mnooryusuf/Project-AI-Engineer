@@ -164,9 +164,8 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
     setError('')
 
     // Semua lampiran — gambar sekalian — sudah masuk knowledge base saat
-    // diunggah, jadi cukup dirujuk lewat document_filename. Gambar TIDAK lagi
-    // dikirim lewat image_filename: jalur itu meng-OCR ulang tiap pertanyaan
-    // (5-30 detik), padahal teksnya sudah tersimpan sejak upload.
+    // diunggah (gambar lewat OCR), jadi cukup dirujuk lewat document_filename
+    // tanpa membaca ulang gambarnya tiap pertanyaan.
     const documentFilename = attachment?.stored_filename ?? null
     setPendingAttachment(null)
 
@@ -181,7 +180,7 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
     abortControllerRef.current = controller
 
     try {
-      await sendMessageStream(sessionId, text, null, documentFilename, {
+      await sendMessageStream(sessionId, text, documentFilename, {
         onMeta: (meta) => {
           assistantMsgId = Date.now() + 1
           setMessages((prev) => [

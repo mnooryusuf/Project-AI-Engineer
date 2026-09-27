@@ -28,12 +28,13 @@ from schemas import (
     UserCreate, UserResponse, Token, TokenData,
     ChatHistoryItem, ChatSessionItem, DocumentListItem,
 )
-from agent import HISTORY_MAX_MESSAGES, find_mentioned_document, run_agent_stream
-from services.document_service import process_and_store_document, store_text_as_document
+from agent import HISTORY_MAX_MESSAGES, IMAGE_EXTENSIONS, run_agent_stream
+from services.document_service import process_and_store_document, store_text_as_document, stored_files_for
 from services.llm_service import check_ollama_status
 from services.gemini_service import gemini_available
 from services.file_validation import verify_file_signature
 from tools.ocr_tool import extract_text_from_image
+from tools.rag_tool import find_mentioned_document
 
 # ── Init ────────────────────────────────────────────────
 settings = get_settings()
@@ -183,10 +184,12 @@ def require_roles(*roles: str):
     """
     async def _check(current_user: User = Depends(get_current_user)) -> User:
         if current_user.role not in roles:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Role '{current_user.role}' tidak diizinkan mengakses endpoint ini.",
+            detail = (
+                "Akun Anda baru bisa bertanya. Hubungi admin Diskominfo untuk izin mengunggah dokumen."
+                if current_user.role == "read_only"
+                else f"Role '{current_user.role}' tidak diizinkan mengakses endpoint ini."
             )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
         return current_user
     return _check
 
@@ -195,18 +198,33 @@ def require_roles(*roles: str):
 
 @app.post("/auth/register", response_model=UserResponse, tags=["Auth"])
 def register(user_data: UserCreate, db: Session = Depends(get_db)):
-    """Registrasi user baru."""
+    """Registrasi user baru.
+
+    Akun baru selalu ber-role read_only: boleh bertanya dan membaca riwayat
+    sendiri, tapi belum boleh menambah dokumen ke knowledge base bersama.
+    Sebelumnya siapa pun yang mendaftar langsung ber-role user dan bisa
+    mengunggah ke knowledge base yang dibaca semua pengguna. Admin menaikkan
+    role lewat `manage_users.py set-role`.
+    """
     if db.query(User).filter(User.username == user_data.username).first():
         raise HTTPException(status_code=400, detail="Username sudah digunakan.")
     user = User(
         username=user_data.username,
         email=user_data.email,
         hashed_password=get_password_hash(user_data.password),
+        role="read_only",
     )
     db.add(user)
     db.commit()
     db.refresh(user)
     return user
+
+
+@app.get("/auth/me", response_model=UserResponse, tags=["Auth"])
+def read_me(current_user: User = Depends(get_current_user)):
+    """Akun yang sedang login — dipakai frontend untuk menampilkan tombol
+    sesuai role (mis. hapus dokumen hanya untuk admin)."""
+    return current_user
 
 
 @app.post("/auth/login", response_model=Token, tags=["Auth"])
@@ -353,9 +371,9 @@ async def chat(
 
     # Dokumen yang disebut namanya di pertanyaan diperlakukan seperti lampiran
     # (dibaca utuh), dan dicatat sebagai document_ref supaya pertanyaan
-    # lanjutan tetap membahasnya — lihat agent.find_mentioned_document.
+    # lanjutan tetap membahasnya — lihat tools/rag_tool.find_mentioned_document.
     mentioned_document = None
-    if not request.document_filename and not request.image_filename:
+    if not request.document_filename:
         mentioned_document = find_mentioned_document(request.message, db)
 
     # Dokumen yang terakhir dilampirkan di sesi ini — dipakai sebagai fokus
@@ -366,7 +384,7 @@ async def chat(
     # soal Media Center dijawab dari surat undangan yang dilampirkan jauh
     # sebelumnya (diuji). Diabaikan juga kalau dokumennya sudah dihapus.
     active_document = None
-    if not request.document_filename and not request.image_filename and not mentioned_document:
+    if not request.document_filename and not mentioned_document:
         last_doc = (
             db.query(ChatHistory.id, ChatHistory.document_ref)
             .filter(
@@ -396,7 +414,11 @@ async def chat(
     # Simpan pesan user — ini masih aman pakai `db` dari Depends(get_db)
     # karena terjadi sebelum StreamingResponse dikembalikan (sinkron, bukan
     # bagian dari body generator).
-    attachment_type = "image" if request.image_filename else ("document" if request.document_filename else None)
+    # Gambar juga dikirim lewat document_filename (teks OCR-nya sudah masuk
+    # knowledge base saat upload), jadi jenis lampiran dibaca dari ekstensinya.
+    attachment_type = None
+    if request.document_filename:
+        attachment_type = "image" if Path(request.document_filename).suffix.lower() in IMAGE_EXTENSIONS else "document"
     db.add(ChatHistory(
         user_id=user_id,
         session_id=request.session_id,
@@ -404,29 +426,15 @@ async def chat(
         message=request.message,
         attachment_type=attachment_type,
         attachment_filename=(
-            _display_filename(request.image_filename or request.document_filename)
-            if attachment_type else None
+            _display_filename(request.document_filename) if attachment_type else None
         ),
         document_ref=request.document_filename or mentioned_document,
     ))
     db.commit()
 
-    # Jika pertanyaan merujuk pada gambar yang diunggah sebelumnya, resolve
-    # nama file ke path di dalam upload_dir. Nama file datang dari client,
-    # jadi ditahan ke basename dan diverifikasi tetap berada di dalam
-    # upload_dir sebelum dipakai — mencegah path traversal (mis. "../../etc/passwd").
-    image_path = None
-    if request.image_filename:
-        upload_dir = Path(settings.upload_dir).resolve()
-        candidate = (upload_dir / Path(request.image_filename).name).resolve()
-        if candidate.is_relative_to(upload_dir) and candidate.is_file():
-            image_path = str(candidate)
-        else:
-            raise HTTPException(status_code=404, detail="Gambar tidak ditemukan.")
-
-    # Sama seperti image_filename, tapi cukup dicocokkan ke kolom filename di
-    # tabel documents (bukan path filesystem) — tidak ada risiko path
-    # traversal di sini karena tidak pernah dipakai untuk buka file di disk.
+    # Dicocokkan ke kolom filename di tabel documents (bukan path
+    # filesystem) — tidak ada risiko path traversal di sini karena tidak
+    # pernah dipakai untuk buka file di disk.
     document_filename = None
     if request.document_filename:
         exists = db.query(Document.id).filter(Document.filename == request.document_filename).first()
@@ -444,7 +452,7 @@ async def chat(
         meta_follow_up = None
         try:
             async for event in run_agent_stream(
-                question=request.message, db=stream_db, image_path=image_path,
+                question=request.message, db=stream_db,
                 document_filename=document_filename,
                 history=history, active_document=active_document, user_id=user_id,
                 model=request.model,
@@ -629,6 +637,15 @@ async def _process_upload_job(job_id: str, file_path: str, original_filename: st
                     Document.filename == original_filename, Document.id <= old_max_id
                 ).delete(synchronize_session=False)
                 db.commit()
+            # Hanya file versi yang sedang dipakai yang disimpan: versi lama
+            # sudah digantikan, dan unggahan yang tidak menghasilkan teks
+            # tidak masuk knowledge base sama sekali.
+            if chunks > 0:
+                for old_file in stored_files_for(original_filename):
+                    if old_file != Path(file_path):
+                        old_file.unlink(missing_ok=True)
+            else:
+                Path(file_path).unlink(missing_ok=True)
 
             job_status = "done" if chunks > 0 else "warning"
             _finish_job(
@@ -642,6 +659,7 @@ async def _process_upload_job(job_id: str, file_path: str, original_filename: st
             # harus tetap sampai ke pengguna — tanpa ini pekerjaan menggantung
             # di status "processing" selamanya.
             _finish_job(db, job_id, "failed", f"Gagal memproses {original_filename}: {e}", 0, None)
+            Path(file_path).unlink(missing_ok=True)
         finally:
             db.close()
 
@@ -791,27 +809,25 @@ def list_documents(
 @app.delete("/documents/{filename}", tags=["Documents"])
 def delete_document(
     filename: str,
-    # read_only sengaja tidak termasuk — sama seperti /upload, menghapus
-    # dokumen mengubah knowledge base bersama, bukan operasi "baca saja".
-    current_user: User = Depends(require_roles("admin", "user")),
+    # Hanya admin: knowledge base dipakai bersama dan dokumen belum punya
+    # pemilik, jadi role user pun tidak boleh menghapus unggahan orang lain.
+    current_user: User = Depends(require_roles("admin")),
     db: Session = Depends(get_db),
 ):
     """
-    Hapus semua chunk milik satu dokumen dari knowledge base (jadi tidak
-    ikut muncul lagi di hasil RAG_SEARCH).
-
-    CATATAN: ini hanya menghapus baris di tabel documents, BUKAN file fisik
-    di storage/uploads/ — nama file yang tersimpan di disk punya prefix uuid
-    (lihat safe_name di /upload) yang tidak direkam di tabel documents,
-    jadi tidak ada cara aman merekonstruksi path aslinya dari sini tanpa
-    perubahan skema lebih lanjut. File fisik jadi sekadar arsip tak
-    terpakai — tidak memengaruhi RAG karena itu murni baca dari tabel ini.
+    Hapus satu dokumen dari knowledge base: semua chunk-nya di tabel
+    documents DAN semua file aslinya di storage/uploads (setiap versi yang
+    pernah diunggah). Sebelumnya file asli tertinggal, sehingga data pribadi
+    di dalamnya tetap tersimpan walau dokumennya sudah "dihapus".
     """
     deleted = db.query(Document).filter(Document.filename == filename).delete()
     db.commit()
     if deleted == 0:
         raise HTTPException(status_code=404, detail="Dokumen tidak ditemukan di knowledge base.")
-    return {"filename": filename, "chunks_deleted": deleted}
+    files = stored_files_for(filename)
+    for f in files:
+        f.unlink(missing_ok=True)
+    return {"filename": filename, "chunks_deleted": deleted, "files_deleted": len(files)}
 
 
 # ── Health Check ─────────────────────────────────────────

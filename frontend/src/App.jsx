@@ -6,7 +6,7 @@ import ChatBox from './components/ChatBox'
 import Sidebar from './components/Sidebar'
 import DocumentsPanel from './components/DocumentsPanel'
 import Mascot from './components/Mascot'
-import { login, register, getChatSessions } from './services/api'
+import { login, register, getChatSessions, getMe } from './services/api'
 
 function LoginPage({ onLogin }) {
   const [mode, setMode]       = useState('login') // 'login' | 'register'
@@ -26,7 +26,7 @@ function LoginPage({ onLogin }) {
         await register(username, email, password)
         setMode('login')
         setError('') 
-        alert('Registrasi berhasil! Silakan login.')
+        alert('Registrasi berhasil! Silakan login.\n\nAkun baru bisa langsung bertanya. Untuk mengunggah dokumen, minta izin ke admin Diskominfo.')
       } else {
         const data = await login(username, password)
         localStorage.setItem('access_token', data.access_token)
@@ -188,6 +188,9 @@ export default function App() {
   const [sessionId, setSessionId] = useState(() => uuidv4())
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [documentsOpen, setDocumentsOpen] = useState(false)
+  // Role akun yang login (admin | user | read_only) — hanya untuk
+  // menampilkan tombol yang sesuai; backend tetap yang menegakkan izinnya.
+  const [role, setRole] = useState(null)
   // { filename, requestedAt } — objek baru tiap klik, supaya memilih dokumen
   // yang sama dua kali tetap memicu efek di ChatBox.
   const [attachRequest, setAttachRequest] = useState(null)
@@ -231,6 +234,11 @@ export default function App() {
   }, [isAuthenticated, loadSessions])
 
   useEffect(() => {
+    if (!isAuthenticated) return
+    getMe().then((me) => setRole(me.role)).catch(() => setRole(null))
+  }, [isAuthenticated])
+
+  useEffect(() => {
     localStorage.setItem('last_session_id', sessionId)
   }, [sessionId])
 
@@ -239,6 +247,7 @@ export default function App() {
     localStorage.removeItem('last_session_id')
     setIsAuthenticated(false)
     setSessions([])
+    setRole(null)
   }
 
   const handleNewChat = () => {
@@ -297,6 +306,7 @@ export default function App() {
       <DocumentsPanel
         isOpen={documentsOpen}
         onClose={() => setDocumentsOpen(false)}
+        canDelete={role === 'admin'}
         onAsk={(filename) => {
           setAttachRequest({ filename, requestedAt: Date.now() })
           setDocumentsOpen(false)

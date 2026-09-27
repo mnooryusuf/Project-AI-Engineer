@@ -5,26 +5,11 @@ LLM memilih tool yang sesuai berdasarkan pertanyaan user.
 import json
 import re
 from pathlib import Path
-from sqlalchemy import text
 from sqlalchemy.orm import Session
-from models import Document
-from services.document_service import CHUNK_OVERLAP
-from services.embedding_service import get_embedding
 from services.llm_service import ask_llm, stream_llm
 from services.gemini_service import ask_gemini, stream_gemini
-from tools.rag_tool import rag_search
-from tools.ocr_tool import extract_text_from_image
+from tools.rag_tool import active_document_wins, document_focus_context, rag_search
 from tools.sql_tool import build_stats_query, is_stats_question, run_sql_query
-
-# Anggaran karakter isi dokumen untuk DOCUMENT_FOCUS (lihat
-# _load_document_context). Dulu dibatasi 6 chunk pertama — dengan CHUNK_SIZE
-# 300 itu cuma ~1.800 karakter, jadi ringkasan/analisis dokumen hampir selalu
-# hanya membahas halaman awal. 12.000 karakter (~3.500-4.000 token teks
-# Indonesia) muat di num_ctx=8192 (config.py) bersama system prompt, riwayat
-# percakapan (HISTORY_*) dan ruang untuk jawaban. Dokumen yang lebih panjang
-# dipilih bagian-bagian paling relevan terhadap pertanyaan, bukan dipotong
-# begitu saja di awal.
-DOCUMENT_FOCUS_MAX_CHARS = 12000
 
 # Riwayat percakapan yang ikut dikirim ke LLM supaya pertanyaan lanjutan
 # ("jelaskan poin kedua", "lanjutkan", "bagaimana dengan pasal 3?") punya
@@ -297,99 +282,6 @@ def _extract_sql(text: str) -> str:
     return match.group(0).rstrip(";").strip()
 
 
-async def _select_relevant_chunks(db: Session, document_filename: str, question: str) -> str:
-    """Untuk dokumen yang melebihi anggaran: chunk pertama selalu ikut
-    (biasanya judul/kop/identitas dokumen), sisanya dipilih berdasarkan
-    kemiripan dengan pertanyaan DI DALAM dokumen ini saja, lalu diurutkan
-    kembali sesuai posisi aslinya supaya alurnya tetap terbaca."""
-    query_embedding = await get_embedding(question)
-    ranked = db.execute(
-        text("""
-            SELECT id, content
-            FROM documents
-            WHERE filename = :filename
-            ORDER BY embedding <=> CAST(:embedding AS vector)
-        """),
-        {"filename": document_filename, "embedding": str(query_embedding)},
-    ).fetchall()
-    first = min(ranked, key=lambda r: r.id)
-
-    chosen = {first.id: first.content}
-    budget = DOCUMENT_FOCUS_MAX_CHARS - len(first.content)
-    for row in ranked:
-        if row.id in chosen:
-            continue
-        if len(row.content) > budget:
-            break
-        chosen[row.id] = row.content
-        budget -= len(row.content)
-
-    # Chunk yang bersebelahan disambung (overlap dibuang); celah antar-bagian
-    # ditandai "[...]" supaya model tahu ada bagian dokumen yang dilewati.
-    ids = sorted(chosen)
-    out = [chosen[ids[0]]]
-    for prev_id, cur_id in zip(ids, ids[1:]):
-        if cur_id == prev_id + 1:
-            out.append(chosen[cur_id][CHUNK_OVERLAP:])
-        else:
-            out.append("\n[...]\n" + chosen[cur_id])
-    return "".join(out)
-
-
-async def _document_focus_context(db: Session, document_filename: str, question: str) -> str:
-    """Ambil isi dokumen untuk DOCUMENT_FOCUS.
-
-    Dokumen yang muat DOCUMENT_FOCUS_MAX_CHARS dikirim UTUH (overlap
-    antar-chunk dibuang supaya teks tidak berulang). Yang lebih panjang
-    diserahkan ke _select_relevant_chunks.
-    """
-    rows = (
-        db.query(Document.content)
-        .filter(Document.filename == document_filename)
-        .order_by(Document.id)
-        .all()
-    )
-    if not rows:
-        return ""
-
-    total = sum(len(r.content) for r in rows) - CHUNK_OVERLAP * (len(rows) - 1)
-    if total > DOCUMENT_FOCUS_MAX_CHARS:
-        return await _select_relevant_chunks(db, document_filename, question)
-    return rows[0].content + "".join(r.content[CHUNK_OVERLAP:] for r in rows[1:])
-
-
-def _normalize_name(text: str) -> str:
-    return " ".join(re.sub(r"[^0-9a-z]+", " ", text.lower()).split())
-
-
-def find_mentioned_document(question: str, db: Session) -> str | None:
-    """Dokumen di knowledge base yang namanya disebut di pertanyaan.
-
-    Tanpa ini, menyebut nama dokumen di percakapan baru tidak ada gunanya:
-    "SPT SINAU JOGJA AI ENGINEER.docx ambil nama kepala dinas dari dokumen
-    ini" tetap dijawab dari surat undangan, karena pencarian umum menaruh
-    tiga chunk surat itu di atas SPT (diuji). Cocok kalau nama lengkap tanpa
-    ekstensi, atau tiga kata pertamanya, muncul utuh di pertanyaan. Nama
-    pendek (< 5 huruf, mis. "6.jpeg") hanya cocok lewat nama file lengkap
-    beserta ekstensinya, supaya angka biasa di pertanyaan tidak ikut cocok.
-    Kalau beberapa cocok, yang paling panjang (paling spesifik) menang.
-    """
-    q = f" {_normalize_name(question)} "
-    best, best_len = None, 0
-    for (filename,) in db.query(Document.filename).distinct():
-        stem = _normalize_name(Path(filename).stem)
-        candidates = [_normalize_name(filename)]
-        if len(stem) >= 5:
-            candidates.append(stem)
-            words = stem.split()
-            if len(words) > 3:
-                candidates.append(" ".join(words[:3]))
-        for cand in candidates:
-            if cand and f" {cand} " in q and len(cand) > best_len:
-                best, best_len = filename, len(cand)
-    return best
-
-
 def _trim_history(history: list[dict] | None) -> list[dict]:
     """Batasi riwayat ke HISTORY_MAX_MESSAGES pesan terakhir dan potong
     pesan yang terlalu panjang — cukup untuk rujukan, bukan salinan penuh."""
@@ -425,31 +317,6 @@ Jawab BARU kalau pertanyaan baru membahas hal lain yang tidak ada hubungannya.
 Jawab dengan satu kata saja: LANJUT atau BARU.
 
 Jawaban:"""
-
-
-# Kelonggaran untuk _active_document_wins. Glosarium istilah menarik skor
-# tinggi untuk hampir semua pertanyaan umum: "siapa saja yang ditugaskan?"
-# -> glosarium 0.522 vs SPT (dokumen aktif, jawabannya memang di sana) 0.506.
-ACTIVE_DOCUMENT_MARGIN = 0.05
-
-
-async def _active_document_wins(db: Session, active_document: str, question: str) -> bool:
-    """True kalau chunk terbaik dokumen aktif lebih mirip dengan pertanyaan
-    daripada chunk terbaik dokumen LAIN mana pun. Membandingkan, bukan
-    memakai ambang: skor mutlak lanjutan dan pindah topik saling tumpang
-    tindih, tapi pada pindah topik asli dokumen lain selalu menang jauh
-    (Media Center +0.50, SPBE +0.33)."""
-    embedding = str(await get_embedding(question))
-    row = db.execute(
-        text("""
-            SELECT
-                MAX(1 - (embedding <=> CAST(:e AS vector))) FILTER (WHERE filename = :f) AS own,
-                MAX(1 - (embedding <=> CAST(:e AS vector))) FILTER (WHERE filename <> :f) AS other
-            FROM documents
-        """),
-        {"e": embedding, "f": active_document},
-    ).first()
-    return row.own is not None and (row.other is None or row.own >= row.other - ACTIVE_DOCUMENT_MARGIN)
 
 
 async def _is_follow_up(
@@ -490,7 +357,7 @@ async def _is_follow_up(
         return False
     if FOLLOW_UP_CUES.search(question) or NYA_SUFFIX.search(question):
         return True
-    if active_document and db is not None and await _active_document_wins(db, active_document, question):
+    if active_document and db is not None and await active_document_wins(db, active_document, question):
         return True
 
     prev_question = next((m["content"] for m in reversed(history) if m["role"] == "user"), "")
@@ -508,7 +375,6 @@ async def _is_follow_up(
 async def _prepare_answer(
     question: str,
     db: Session,
-    image_path: str = None,
     document_filename: str = None,
     active_document: str = None,
     retrieval_query: str = None,
@@ -533,13 +399,7 @@ async def _prepare_answer(
     context = ""
     sources = []
 
-    if image_path:
-        tool_used = "IMAGE_OCR"
-        tool_result = await extract_text_from_image(image_path)
-        if tool_result["success"]:
-            context = f"Teks dari gambar:\n{tool_result['text']}"
-
-    elif document_filename:
+    if document_filename:
         # Gambar yang diunggah kini juga masuk tabel documents (teks hasil OCR,
         # lihat /upload), jadi pertanyaan soal gambar sampai ke cabang ini —
         # bukan lagi ke IMAGE_OCR yang meng-OCR ulang tiap kali ditanya.
@@ -553,7 +413,7 @@ async def _prepare_answer(
         # § "Risiko terkonfirmasi: sitasi palsu"). Ini menghilangkan akar
         # masalah itu untuk kasus spesifik "tanya soal dokumen yg baru
         # diunggah" — kita SUDAH TAHU dokumennya, tidak perlu menebak.
-        context = await _document_focus_context(db, document_filename, question)
+        context = await document_focus_context(db, document_filename, question)
         if context:
             sources = [document_filename]
 
@@ -576,7 +436,7 @@ async def _prepare_answer(
         if active_document:
             # Lanjutan percakapan tentang dokumen yang dilampirkan sebelumnya.
             tool_used = "IMAGE_OCR" if Path(active_document).suffix.lower() in IMAGE_EXTENSIONS else "DOCUMENT_FOCUS"
-            context = await _document_focus_context(db, active_document, retrieval_query or question)
+            context = await document_focus_context(db, active_document, retrieval_query or question)
             if context:
                 sources = [active_document]
         elif is_stats_question(question):
@@ -715,7 +575,6 @@ Pertanyaan: {prompt_question}"""
 async def run_agent(
     question: str,
     db: Session,
-    image_path: str = None,
     document_filename: str = None,
     session_id: str = "default",
     history: list[dict] | None = None,
@@ -727,7 +586,7 @@ async def run_agent(
     diagnostik (lihat README, task.md). Endpoint /chat sekarang memakai
     run_agent_stream()."""
     events = [e async for e in run_agent_stream(
-        question, db, image_path, document_filename, history, active_document, user_id, model
+        question, db, document_filename, history, active_document, user_id, model
     )]
     meta = events[0]
     answer = "".join(e["text"] for e in events if e["type"] == "token")
@@ -737,7 +596,6 @@ async def run_agent(
 async def run_agent_stream(
     question: str,
     db: Session,
-    image_path: str = None,
     document_filename: str = None,
     history: list[dict] | None = None,
     active_document: str = None,
@@ -765,7 +623,7 @@ async def run_agent_stream(
     """
     ask_answer, stream_answer = ANSWER_MODELS[model]
     follow_up = False
-    if not (image_path or document_filename):
+    if not document_filename:
         follow_up = await _is_follow_up(question, history, active_document, db)
 
     retrieval_query = previous_question = None
@@ -780,7 +638,7 @@ async def run_agent_stream(
         history, active_document = None, None
 
     tool_used, sources, final_prompt = await _prepare_answer(
-        question, db, image_path, document_filename, active_document, retrieval_query, user_id,
+        question, db, document_filename, active_document, retrieval_query, user_id,
         previous_question,
     )
 

@@ -10,7 +10,7 @@ AI Assistant lokal berbasis **Agentic RAG** dengan kemampuan membaca dokumen, ga
 | Backend | FastAPI + Python 3.12 |
 | Agent | Orkestrasi sendiri di `agent.py` (panggil Ollama via `httpx`) |
 | LLM | Ollama `llama3.2:3b` |
-| Embedding | Ollama `all-minilm` |
+| Embedding | Ollama `paraphrase-multilingual` (768 dimensi) |
 | OCR | EasyOCR |
 | Database | PostgreSQL + pgvector |
 
@@ -36,7 +36,7 @@ docker compose up -d
 
 # Pull model Ollama (jika belum)
 ollama pull llama3.2:3b
-ollama pull all-minilm
+ollama pull paraphrase-multilingual
 
 # Setup backend
 cd backend
@@ -49,6 +49,25 @@ cd frontend
 npm install
 cd ..
 ```
+
+### Akun admin pertama
+
+Pendaftaran lewat aplikasi selalu menghasilkan akun `read_only` (bisa
+bertanya, belum bisa mengunggah). Setelah backend pernah dijalankan sekali
+(tabel sudah dibuat), buat admin dan setujui akun lain dari terminal:
+
+```bash
+cd backend
+.venv/bin/python3 manage_users.py create-admin <username> <email>   # password ditanya
+.venv/bin/python3 manage_users.py set-role <username> user          # izinkan unggah
+.venv/bin/python3 manage_users.py list
+```
+
+| Role | Bertanya | Unggah dokumen | Hapus dokumen |
+|---|---|---|---|
+| `read_only` | ✅ | — | — |
+| `user` | ✅ | ✅ | — |
+| `admin` | ✅ | ✅ | ✅ (chunk + file asli) |
 
 ### 2. Menjalankan (setiap kali)
 
@@ -154,10 +173,10 @@ dikembalikan ke kondisi semula:
 |---|---|
 | **Python 3.12, bukan 3.13+** | `pydantic-core` dan `psycopg` belum punya wheel untuk Python 3.13/3.14. `start.sh` sengaja gagal cepat jika `python3.12` tidak ada. |
 | **Index HNSW, bukan ivfflat** | `ivfflat` membagi data ke beberapa list dan default hanya memindai satu list per query. Pada knowledge base kecil, sebagian besar chunk tidak pernah terpindai — pencarian mengembalikan 0 baris meski datanya ada. |
-| **Ambang similarity 0.55** | `all-minilm` dilatih untuk bahasa Inggris, sehingga teks Indonesia menempati pita similarity yang sempit (relevan 0.63–0.69, tidak relevan 0.27–0.51). Ambang rendah membuat dokumen acak ikut dikutip sebagai sumber. |
+| **Embedding `paraphrase-multilingual` + ambang similarity 0.49** | `all-minilm` (dipakai sebelumnya, ambang 0.55) dilatih untuk bahasa Inggris: pada teks Indonesia pita skor relevan (0.460–0.715) dan luar topik (0.487–0.599) tumpang tindih, jadi tidak ada ambang yang bisa memisahkan. `paraphrase-multilingual` memisahkan keduanya dengan bersih (relevan 0.547–0.832, luar topik 0.179–0.337); 0.49 diukur untuk model ini — lihat `tools/rag_tool.py`. Ganti model = ubah `VECTOR()` di `init.sql` dan `models.py`, jalankan `reindex_documents.py --apply`, lalu ukur ulang ambangnya. |
 | **`env_file` pakai path absolut** | `uvicorn` dijalankan dari dalam `backend/`, sehingga `.env` relatif tidak ketemu dan semua konfigurasi diam-diam memakai default — termasuk `SECRET_KEY`. |
 | **`bcrypt` langsung, bukan `passlib`** | `passlib` 1.7.4 tidak kompatibel dengan `bcrypt` 5.x. |
-| **`ChatRequest.image_filename`** | `agent.py` sudah punya logika OCR lengkap, tapi endpoint `/chat` tidak pernah mengoper `image_path` ke `run_agent()` — fitur OCR tidak tersentuh lewat API/UI sama sekali. Sekarang `/upload` mengembalikan `stored_filename`, frontend menyimpannya sebagai lampiran tertunda dan mengirimkannya bersama pesan berikutnya, dan `/chat` menahannya ke `upload_dir` (basename + cek `is_relative_to`) sebelum dipakai — mencegah path traversal dari input client. |
+| **Gambar di-OCR saat upload, bukan saat ditanya** | `ChatRequest.image_filename` dan cabang `image_path` di `agent.py` sudah dihapus. Teks gambar dibaca sekali di `/upload` lalu disimpan ke knowledge base, dan pertanyaan soal gambar dikirim lewat `document_filename` seperti dokumen lain. Jalur lama meng-OCR ulang gambar di setiap pertanyaan (5–30 detik) dan sudah tidak dipakai frontend. Jangan dikembalikan. |
 | **Instruksi fallback "balas persis: ..." dihapus dari prompt jawaban akhir** | Pada `llama3.2:1b`, instruksi larangan multi-baris ini justru membuat model salah menolak menjawab meski konteksnya sudah lengkap (terbukti pada pertanyaan OCR terbuka). Karena ambang similarity 0.55 sudah menyaring pertanyaan tak relevan sebelum LLM dipanggil, instruksi ini lebih banyak menimbulkan regresi daripada manfaat. |
 | **Ekstraksi SQL pakai regex, bukan `.strip("```sql")`** | `.strip()` hanya membersihkan ujung string; `llama3.2:1b` selalu membungkus SQL dengan penjelasan naratif di depannya, jadi SEMUA query yang dihasilkan LLM otomatis gagal validasi (ditolak sebagai "bukan SELECT"). Fitur SQL_QUERY 100% tidak pernah benar-benar tereksekusi sampai ini diperbaiki. |
 | **`run_sql_query()` wajib `db.rollback()` saat query gagal** | Tanpa ini, error SQL (query yang dihasilkan LLM sering salah kolom/tabel) membuat sesi SQLAlchemy "keracunan" (`InFailedSqlTransaction`) — setiap operasi database berikutnya di request yang sama ikut gagal, termasuk penyimpanan chat history. Sempat menyebabkan respons API kosong/rusak saat diuji. |
@@ -196,7 +215,7 @@ memblokir kasus ini otomatis akan merusak kasus RAG yang sudah benar.
 - Instruksi khusus di system prompt melarang mengarang nama orang — tetap
   diabaikan model pada kasus ini.
 
-**Mitigasi yang berlaku saat ini:** ambang similarity 0.55 tetap menyaring
+**Mitigasi yang berlaku saat ini:** ambang similarity 0.49 tetap menyaring
 mayoritas pertanyaan yang benar-benar tidak relevan secara topik (terbukti
 efektif). Risiko residual hanya pada zona sempit "topik mirip, fakta spesifik
 tidak ada" — terutama pertanyaan tentang nama orang/pejabat. **Rekomendasi:
@@ -213,9 +232,6 @@ anggaran RAM 8GB & waktu pengembangan project pelatihan ini.
   benar karena agent jatuh ke `direct_answer` saat RAG tidak menemukan konteks,
   tetapi pertanyaan statistik belum tentu benar-benar menjalankan SQL. Model
   yang lebih besar (`llama3.2:3b` ke atas) akan jauh lebih akurat memilih tool.
-- **Embedding belum multilingual.** `all-minilm` bukan model bahasa Indonesia.
-  Untuk akurasi RAG yang lebih baik, pertimbangkan `bge-m3` — konsekuensinya
-  kebutuhan RAM naik cukup besar.
 - **Akurasi OCR EasyOCR bervariasi** pada teks kecil/renggang — pada uji coba,
   spasi dan tanda baca (`/`, `-`) kadang hilang atau berubah simbol. Untuk
   dokumen resmi hasil scan/foto, cek ulang hasil OCR sebelum dipakai sebagai
@@ -254,7 +270,7 @@ Diukur pada mesin pengembangan (Apple Silicon, 8GB RAM), model sudah termuat:
 ## 📊 Optimasi RAM 8GB
 
 - Model `llama3.2:3b` (~2GB di disk, ~2,6GB saat dimuat). Dipilih setelah diuji berdampingan dengan `llama3.2:1b`: 3b menjawab lengkap dan jujur saat informasi tidak ada di dokumen, sementara 1b sering meringkas terlalu pendek dan salah membaca tabel harga. Kekurangannya, jawaban 2-4x lebih lambat (5-32 detik). Kembali ke 1b cukup dengan `OLLAMA_LLM_MODEL=llama3.2:1b` di `.env`
-- Embedding `all-minilm` (45MB)
+- Embedding `paraphrase-multilingual` (~560MB)
 - EasyOCR lazy loading (dimuat saat dibutuhkan)
 - PostgreSQL dibatasi 512MB via docker-compose
 - `num_ctx=8192` (`LLM_NUM_CTX` di config.py) — cukup untuk dokumen lampiran ~12.000 karakter + riwayat percakapan; KV-cache ~940MB pada llama3.2:3b (~256MB pada 1b)

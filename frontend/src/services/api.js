@@ -53,6 +53,11 @@ export const register = async (username, email, password) => {
   return res.data
 }
 
+export const getMe = async () => {
+  const res = await api.get('/auth/me')
+  return res.data
+}
+
 // ── Chat ──────────────────────────────────────────────
 
 // Streaming: /chat sekarang membalas NDJSON (satu baris JSON per event),
@@ -63,7 +68,7 @@ export const register = async (username, email, password) => {
 //   onToken(text)   -> setiap potongan token jawaban
 //   onDone()        -> sekali, setelah stream selesai normal
 // Melempar Error kalau request gagal total (network/HTTP non-2xx).
-export const sendMessageStream = async (sessionId, message, imageFilename, documentFilename, callbacks = {}, signal, model = 'local') => {
+export const sendMessageStream = async (sessionId, message, documentFilename, callbacks = {}, signal, model = 'local') => {
   const { onMeta, onToken, onDone } = callbacks
   const token = localStorage.getItem('access_token')
 
@@ -76,7 +81,6 @@ export const sendMessageStream = async (sessionId, message, imageFilename, docum
     body: JSON.stringify({
       session_id: sessionId,
       message,
-      image_filename: imageFilename,
       document_filename: documentFilename,
       model,
     }),

@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     # dokumen selalu terpotong, dan tidak tersisa ruang untuk riwayat
     # percakapan. KV-cache 8192 token ~940MB pada llama3.2:3b (~256MB pada
     # 1b) — masih muat di RAM 8GB bersama model embedding, tapi mepet. Harus
-    # selaras dengan DOCUMENT_FOCUS_MAX_CHARS dan batas riwayat di agent.py.
+    # selaras dengan DOCUMENT_FOCUS_MAX_CHARS (tools/rag_tool.py) dan batas riwayat di agent.py.
     llm_num_ctx: int = 8192
     # paraphrase-multilingual (768 dimensi, ~560MB). Menggantikan all-minilm
     # yang hanya dilatih bahasa Inggris: pada knowledge base berbahasa

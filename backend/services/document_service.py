@@ -3,6 +3,7 @@ services/document_service.py — Memproses dokumen untuk RAG pipeline
 Mendukung: PDF, TXT, DOCX, XLSX
 """
 import os
+import re
 import aiofiles
 from pathlib import Path
 from typing import List
@@ -12,6 +13,27 @@ from services.embedding_service import get_embedding
 from config import get_settings
 
 settings = get_settings()
+
+# Nama file di disk berformat "{uuid_hex}_{nama asli}" (lihat /upload di
+# main.py), sedangkan tabel documents hanya menyimpan nama aslinya. Unggah
+# ulang berkas bernama sama menambah file baru dengan uuid lain.
+UUID_PREFIX = re.compile(r"^[0-9a-f]{32}_")
+
+
+def stored_files_for(filename: str) -> list[Path]:
+    """Semua file di upload_dir milik dokumen bernama `filename` (semua versi
+    unggahannya), terlama lebih dulu. Dipakai supaya menghapus atau
+    mengganti dokumen ikut menghapus file aslinya — tanpa ini file tetap
+    tertinggal di storage/uploads walau dokumennya sudah dihapus (hak hapus
+    data pribadi tidak terpenuhi)."""
+    upload_dir = Path(settings.upload_dir)
+    if not upload_dir.is_dir():
+        return []
+    files = [
+        f for f in upload_dir.iterdir()
+        if f.is_file() and UUID_PREFIX.match(f.name) and UUID_PREFIX.sub("", f.name, count=1) == filename
+    ]
+    return sorted(files, key=lambda f: f.stat().st_mtime)
 
 # Ukuran chunk. Dibatasi 300 karakter karena paraphrase-multilingual hanya
 # menerima 128 token per input: chunk 500 karakter TERBUKTI ditolak Ollama

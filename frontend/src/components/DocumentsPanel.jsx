@@ -9,7 +9,7 @@ function formatDate(iso) {
   return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-export default function DocumentsPanel({ isOpen, onClose, onAsk }) {
+export default function DocumentsPanel({ isOpen, onClose, onAsk, canDelete }) {
   const [documents, setDocuments] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -128,14 +128,16 @@ export default function DocumentsPanel({ isOpen, onClose, onAsk }) {
                       >
                         <MessageSquare size={15} /> Tanyakan
                       </button>
-                      <button
-                        onClick={() => setConfirmingFilename(doc.filename)}
-                        className="w-8 h-8 flex-shrink-0 rounded-lg flex items-center justify-center hover:bg-red-500/10 transition-colors"
-                        style={{ color: 'var(--text-muted)' }}
-                        title="Hapus dari knowledge base"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      {canDelete && (
+                        <button
+                          onClick={() => setConfirmingFilename(doc.filename)}
+                          className="w-8 h-8 flex-shrink-0 rounded-lg flex items-center justify-center hover:bg-red-500/10 transition-colors"
+                          style={{ color: 'var(--text-muted)' }}
+                          title="Hapus dari knowledge base"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
                     </div>
                   )}
                 </li>

@@ -25,8 +25,10 @@ CREATE TABLE IF NOT EXISTS documents (
     id BIGSERIAL PRIMARY KEY,
     filename VARCHAR(255) NOT NULL,
     content TEXT NOT NULL,
-    -- all-minilm menghasilkan 384 dimensi
-    embedding VECTOR(384),
+    -- paraphrase-multilingual menghasilkan 768 dimensi — harus sama dengan
+    -- Vector(768) di models.py. Ganti model embedding = ubah angka ini dan
+    -- jalankan reindex_documents.py (lihat README).
+    embedding VECTOR(768),
     metadata JSONB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -45,13 +47,13 @@ CREATE TABLE IF NOT EXISTS users (
     username VARCHAR(100) UNIQUE NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     hashed_password VARCHAR(255) NOT NULL,
-    role VARCHAR(20) DEFAULT 'user' CHECK (role IN ('admin', 'user', 'read_only')),
+    role VARCHAR(20) DEFAULT 'read_only' CHECK (role IN ('admin', 'user', 'read_only')),
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Insert user admin default (password: admin123 — ganti setelah deploy!)
--- Password hash dibuat oleh aplikasi, bukan di sini langsung
+-- Tidak ada akun admin bawaan. Buat admin pertama dari backend/:
+--   .venv/bin/python3 manage_users.py create-admin <username> <email>
 
 -- ── User read-only khusus SQL Agent ──────────────────────
 -- SQL_QUERY tool sebelumnya memakai koneksi "postgres" (superuser) yang

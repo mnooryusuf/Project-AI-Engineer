@@ -1,9 +1,14 @@
 """
 tools/rag_tool.py — RAG Search Tool
-Similarity search pada pgvector menggunakan cosine distance
+Semua pengambilan isi knowledge base untuk agent: similarity search umum
+(rag_search), isi satu dokumen tertentu (document_focus_context), dan
+pencocokan dokumen yang disebut atau sedang dibahas.
 """
+import re
+from pathlib import Path
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from models import Document
 from services.embedding_service import get_embedding
 from services.document_service import CHUNK_OVERLAP
 
@@ -121,3 +126,132 @@ async def rag_search(query: str, db: Session, top_k: int = MAX_CHUNKS) -> dict:
         "context": "\n\n---\n\n".join(context_parts),
         "sources": doc_order,
     }
+
+
+# Anggaran karakter isi dokumen untuk DOCUMENT_FOCUS (lihat
+# document_focus_context). Dulu dibatasi 6 chunk pertama — dengan CHUNK_SIZE
+# 300 itu cuma ~1.800 karakter, jadi ringkasan/analisis dokumen hampir selalu
+# hanya membahas halaman awal. 12.000 karakter (~3.500-4.000 token teks
+# Indonesia) muat di num_ctx=8192 (config.py) bersama system prompt, riwayat
+# percakapan (HISTORY_* di agent.py) dan ruang untuk jawaban. Dokumen yang lebih panjang
+# dipilih bagian-bagian paling relevan terhadap pertanyaan, bukan dipotong
+# begitu saja di awal.
+DOCUMENT_FOCUS_MAX_CHARS = 12000
+
+
+# Kelonggaran untuk active_document_wins. Glosarium istilah menarik skor
+# tinggi untuk hampir semua pertanyaan umum: "siapa saja yang ditugaskan?"
+# -> glosarium 0.522 vs SPT (dokumen aktif, jawabannya memang di sana) 0.506.
+ACTIVE_DOCUMENT_MARGIN = 0.05
+
+
+async def active_document_wins(db: Session, active_document: str, question: str) -> bool:
+    """True kalau chunk terbaik dokumen aktif lebih mirip dengan pertanyaan
+    daripada chunk terbaik dokumen LAIN mana pun. Membandingkan, bukan
+    memakai ambang: skor mutlak lanjutan dan pindah topik saling tumpang
+    tindih, tapi pada pindah topik asli dokumen lain selalu menang jauh
+    (Media Center +0.50, SPBE +0.33)."""
+    embedding = str(await get_embedding(question))
+    row = db.execute(
+        text("""
+            SELECT
+                MAX(1 - (embedding <=> CAST(:e AS vector))) FILTER (WHERE filename = :f) AS own,
+                MAX(1 - (embedding <=> CAST(:e AS vector))) FILTER (WHERE filename <> :f) AS other
+            FROM documents
+        """),
+        {"e": embedding, "f": active_document},
+    ).first()
+    return row.own is not None and (row.other is None or row.own >= row.other - ACTIVE_DOCUMENT_MARGIN)
+
+
+async def _select_relevant_chunks(db: Session, document_filename: str, question: str) -> str:
+    """Untuk dokumen yang melebihi anggaran: chunk pertama selalu ikut
+    (biasanya judul/kop/identitas dokumen), sisanya dipilih berdasarkan
+    kemiripan dengan pertanyaan DI DALAM dokumen ini saja, lalu diurutkan
+    kembali sesuai posisi aslinya supaya alurnya tetap terbaca."""
+    query_embedding = await get_embedding(question)
+    ranked = db.execute(
+        text("""
+            SELECT id, content
+            FROM documents
+            WHERE filename = :filename
+            ORDER BY embedding <=> CAST(:embedding AS vector)
+        """),
+        {"filename": document_filename, "embedding": str(query_embedding)},
+    ).fetchall()
+    first = min(ranked, key=lambda r: r.id)
+
+    chosen = {first.id: first.content}
+    budget = DOCUMENT_FOCUS_MAX_CHARS - len(first.content)
+    for row in ranked:
+        if row.id in chosen:
+            continue
+        if len(row.content) > budget:
+            break
+        chosen[row.id] = row.content
+        budget -= len(row.content)
+
+    # Chunk yang bersebelahan disambung (overlap dibuang); celah antar-bagian
+    # ditandai "[...]" supaya model tahu ada bagian dokumen yang dilewati.
+    ids = sorted(chosen)
+    out = [chosen[ids[0]]]
+    for prev_id, cur_id in zip(ids, ids[1:]):
+        if cur_id == prev_id + 1:
+            out.append(chosen[cur_id][CHUNK_OVERLAP:])
+        else:
+            out.append("\n[...]\n" + chosen[cur_id])
+    return "".join(out)
+
+
+async def document_focus_context(db: Session, document_filename: str, question: str) -> str:
+    """Ambil isi dokumen untuk DOCUMENT_FOCUS.
+
+    Dokumen yang muat DOCUMENT_FOCUS_MAX_CHARS dikirim UTUH (overlap
+    antar-chunk dibuang supaya teks tidak berulang). Yang lebih panjang
+    diserahkan ke _select_relevant_chunks.
+    """
+    rows = (
+        db.query(Document.content)
+        .filter(Document.filename == document_filename)
+        .order_by(Document.id)
+        .all()
+    )
+    if not rows:
+        return ""
+
+    total = sum(len(r.content) for r in rows) - CHUNK_OVERLAP * (len(rows) - 1)
+    if total > DOCUMENT_FOCUS_MAX_CHARS:
+        return await _select_relevant_chunks(db, document_filename, question)
+    return rows[0].content + "".join(r.content[CHUNK_OVERLAP:] for r in rows[1:])
+
+
+def _normalize_name(text: str) -> str:
+    return " ".join(re.sub(r"[^0-9a-z]+", " ", text.lower()).split())
+
+
+def find_mentioned_document(question: str, db: Session) -> str | None:
+    """Dokumen di knowledge base yang namanya disebut di pertanyaan.
+
+    Tanpa ini, menyebut nama dokumen di percakapan baru tidak ada gunanya:
+    "SPT SINAU JOGJA AI ENGINEER.docx ambil nama kepala dinas dari dokumen
+    ini" tetap dijawab dari surat undangan, karena pencarian umum menaruh
+    tiga chunk surat itu di atas SPT (diuji). Cocok kalau nama lengkap tanpa
+    ekstensi, atau tiga kata pertamanya, muncul utuh di pertanyaan. Nama
+    pendek (< 5 huruf, mis. "6.jpeg") hanya cocok lewat nama file lengkap
+    beserta ekstensinya, supaya angka biasa di pertanyaan tidak ikut cocok.
+    Kalau beberapa cocok, yang paling panjang (paling spesifik) menang.
+    """
+    q = f" {_normalize_name(question)} "
+    best, best_len = None, 0
+    for (filename,) in db.query(Document.filename).distinct():
+        stem = _normalize_name(Path(filename).stem)
+        candidates = [_normalize_name(filename)]
+        if len(stem) >= 5:
+            candidates.append(stem)
+            words = stem.split()
+            if len(words) > 3:
+                candidates.append(" ".join(words[:3]))
+        for cand in candidates:
+            if cand and f" {cand} " in q and len(cand) > best_len:
+                best, best_len = filename, len(cand)
+    return best
