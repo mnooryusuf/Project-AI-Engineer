@@ -54,6 +54,12 @@ class Document(Base):
     # "metadata" adalah nama yang dipakai Declarative API, jadi atribut
     # Python-nya diberi nama lain sambil tetap memetakan ke kolom "metadata".
     doc_metadata = Column("metadata", JSON)
+    # Tingkat akses dokumen: umum | internal | rahasia (lihat access.py).
+    # Sama untuk semua chunk satu dokumen.
+    access_level = Column(String(20), nullable=False, server_default="internal", index=True)
+    # Pengunggah (users.id) — jejak kepemilikan dokumen. Kosong untuk dokumen
+    # yang diunggah sebelum kolom ini ada.
+    uploaded_by = Column(BigInteger, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 

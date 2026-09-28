@@ -39,6 +39,7 @@ async def ask_llm(prompt: str, system_prompt: str = "", history: list[dict] | No
                 "model": settings.ollama_llm_model,
                 "messages": messages,
                 "stream": False,
+                "keep_alive": settings.ollama_keep_alive,
                 "options": {
                     "num_ctx": settings.llm_num_ctx,
                     "temperature": 0.1,
@@ -71,6 +72,7 @@ async def stream_llm(prompt: str, system_prompt: str = "", history: list[dict] |
                 "model": settings.ollama_llm_model,
                 "messages": messages,
                 "stream": True,
+                "keep_alive": settings.ollama_keep_alive,
                 "options": {
                     "num_ctx": settings.llm_num_ctx,
                     "temperature": 0.1,

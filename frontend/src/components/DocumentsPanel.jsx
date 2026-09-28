@@ -2,7 +2,14 @@
 // knowledge base (bukan cuma toast notifikasi sesaat saat upload).
 import { useEffect, useState } from 'react'
 import { FileText, X, Trash2, MessageSquare } from 'lucide-react'
-import { getDocuments, deleteDocument } from '../services/api'
+import { getDocuments, deleteDocument, updateDocumentAccess } from '../services/api'
+
+// Tingkat akses dokumen (backend/access.py): siapa yang bisa mencarinya.
+const ACCESS_LABELS = {
+  umum: { label: 'Umum', title: 'Bisa dicari semua akun', color: '#86efac' },
+  internal: { label: 'Internal', title: 'Hanya pegawai yang disetujui admin', color: '#93c5fd' },
+  rahasia: { label: 'Rahasia', title: 'Hanya admin', color: '#fca5a5' },
+}
 
 function formatDate(iso) {
   const date = new Date(iso + (iso.endsWith('Z') ? '' : 'Z'))
@@ -27,6 +34,15 @@ export default function DocumentsPanel({ isOpen, onClose, onAsk, canDelete }) {
   }, [isOpen])
 
   if (!isOpen) return null
+
+  const handleAccessChange = async (filename, accessLevel) => {
+    try {
+      await updateDocumentAccess(filename, accessLevel)
+      setDocuments((prev) => prev.map((d) => (d.filename === filename ? { ...d, access_level: accessLevel } : d)))
+    } catch {
+      setError(`Gagal mengubah tingkat akses "${filename}".`)
+    }
+  }
 
   const handleDelete = async (filename) => {
     setDeletingFilename(filename)
@@ -95,8 +111,29 @@ export default function DocumentsPanel({ isOpen, onClose, onAsk, canDelete }) {
                     <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }} title={doc.filename}>
                       {doc.filename}
                     </p>
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                      {doc.chunk_count} chunk &middot; {formatDate(doc.uploaded_at)}
+                    <p className="text-xs mt-0.5 flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+                      {canDelete ? (
+                        <select
+                          value={doc.access_level}
+                          onChange={(e) => handleAccessChange(doc.filename, e.target.value)}
+                          className="access-select text-xs font-semibold rounded-md px-1 py-0.5 outline-none"
+                          style={{ background: 'var(--overlay-2)', color: ACCESS_LABELS[doc.access_level]?.color }}
+                          title="Tingkat akses: siapa yang bisa mencari dokumen ini"
+                        >
+                          {Object.entries(ACCESS_LABELS).map(([value, { label }]) => (
+                            <option key={value} value={value}>{label}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span
+                          className="font-semibold"
+                          style={{ color: ACCESS_LABELS[doc.access_level]?.color }}
+                          title={ACCESS_LABELS[doc.access_level]?.title}
+                        >
+                          {ACCESS_LABELS[doc.access_level]?.label ?? doc.access_level}
+                        </span>
+                      )}
+                      &middot; {doc.chunk_count} chunk &middot; {formatDate(doc.uploaded_at)}
                     </p>
                   </div>
 

@@ -1,0 +1,898 @@
+[
+ {
+  "active_document": "Surat Undangan Penilaian Interviu Pemdi 2026.pdf",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi surat undangan ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "Surat ini mengundang perangkat daerah mengikuti Penilaian Interviu Evaluasi Kinerja Pemerintah Digital Tahun 2026 pada Kamis, 24 September 2026 pukul 08.30 WITA di Media Center Sekretariat Daerah Kab. Hulu Sungai Selatan, secara daring melalui Zoom Meeting."
+   }
+  ],
+  "question": "Siapa saja yang diundang?",
+  "expected": true,
+  "note": "gagal di uji asli"
+ },
+ {
+  "active_document": "Surat Undangan Penilaian Interviu Pemdi 2026.pdf",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi surat undangan ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "Surat ini mengundang perangkat daerah mengikuti Penilaian Interviu Evaluasi Kinerja Pemerintah Digital Tahun 2026 pada Kamis, 24 September 2026 pukul 08.30 WITA di Media Center Sekretariat Daerah Kab. Hulu Sungai Selatan, secara daring melalui Zoom Meeting."
+   }
+  ],
+  "question": "Jam berapa acaranya dimulai?",
+  "expected": true,
+  "note": ""
+ },
+ {
+  "active_document": "Surat Undangan Penilaian Interviu Pemdi 2026.pdf",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi surat undangan ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "Surat ini mengundang perangkat daerah mengikuti Penilaian Interviu Evaluasi Kinerja Pemerintah Digital Tahun 2026 pada Kamis, 24 September 2026 pukul 08.30 WITA di Media Center Sekretariat Daerah Kab. Hulu Sungai Selatan, secara daring melalui Zoom Meeting."
+   }
+  ],
+  "question": "Di mana tempatnya?",
+  "expected": true,
+  "note": ""
+ },
+ {
+  "active_document": "Surat Undangan Penilaian Interviu Pemdi 2026.pdf",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi surat undangan ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "Surat ini mengundang perangkat daerah mengikuti Penilaian Interviu Evaluasi Kinerja Pemerintah Digital Tahun 2026 pada Kamis, 24 September 2026 pukul 08.30 WITA di Media Center Sekretariat Daerah Kab. Hulu Sungai Selatan, secara daring melalui Zoom Meeting."
+   }
+  ],
+  "question": "Hari apa kegiatannya?",
+  "expected": true,
+  "note": ""
+ },
+ {
+  "active_document": "Surat Undangan Penilaian Interviu Pemdi 2026.pdf",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi surat undangan ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "Surat ini mengundang perangkat daerah mengikuti Penilaian Interviu Evaluasi Kinerja Pemerintah Digital Tahun 2026 pada Kamis, 24 September 2026 pukul 08.30 WITA di Media Center Sekretariat Daerah Kab. Hulu Sungai Selatan, secara daring melalui Zoom Meeting."
+   }
+  ],
+  "question": "Siapa yang menandatangani surat ini?",
+  "expected": true,
+  "note": ""
+ },
+ {
+  "active_document": "Surat Undangan Penilaian Interviu Pemdi 2026.pdf",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi surat undangan ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "Surat ini mengundang perangkat daerah mengikuti Penilaian Interviu Evaluasi Kinerja Pemerintah Digital Tahun 2026 pada Kamis, 24 September 2026 pukul 08.30 WITA di Media Center Sekretariat Daerah Kab. Hulu Sungai Selatan, secara daring melalui Zoom Meeting."
+   }
+  ],
+  "question": "Nomor suratnya berapa?",
+  "expected": true,
+  "note": ""
+ },
+ {
+  "active_document": "Surat Undangan Penilaian Interviu Pemdi 2026.pdf",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi surat undangan ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "Surat ini mengundang perangkat daerah mengikuti Penilaian Interviu Evaluasi Kinerja Pemerintah Digital Tahun 2026 pada Kamis, 24 September 2026 pukul 08.30 WITA di Media Center Sekretariat Daerah Kab. Hulu Sungai Selatan, secara daring melalui Zoom Meeting."
+   }
+  ],
+  "question": "Apakah kegiatannya daring atau luring?",
+  "expected": true,
+  "note": ""
+ },
+ {
+  "active_document": "Surat Undangan Penilaian Interviu Pemdi 2026.pdf",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi surat undangan ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "Surat ini mengundang perangkat daerah mengikuti Penilaian Interviu Evaluasi Kinerja Pemerintah Digital Tahun 2026 pada Kamis, 24 September 2026 pukul 08.30 WITA di Media Center Sekretariat Daerah Kab. Hulu Sungai Selatan, secara daring melalui Zoom Meeting."
+   }
+  ],
+  "question": "Apa dasar surat undangan ini?",
+  "expected": true,
+  "note": ""
+ },
+ {
+  "active_document": "Surat Undangan Penilaian Interviu Pemdi 2026.pdf",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi surat undangan ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "Surat ini mengundang perangkat daerah mengikuti Penilaian Interviu Evaluasi Kinerja Pemerintah Digital Tahun 2026 pada Kamis, 24 September 2026 pukul 08.30 WITA di Media Center Sekretariat Daerah Kab. Hulu Sungai Selatan, secara daring melalui Zoom Meeting."
+   }
+  ],
+  "question": "Berapa banyak perangkat daerah yang diundang?",
+  "expected": true,
+  "note": ""
+ },
+ {
+  "active_document": "Surat Undangan Penilaian Interviu Pemdi 2026.pdf",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi surat undangan ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "Surat ini mengundang perangkat daerah mengikuti Penilaian Interviu Evaluasi Kinerja Pemerintah Digital Tahun 2026 pada Kamis, 24 September 2026 pukul 08.30 WITA di Media Center Sekretariat Daerah Kab. Hulu Sungai Selatan, secara daring melalui Zoom Meeting."
+   }
+  ],
+  "question": "Sifat surat ini apa?",
+  "expected": true,
+  "note": ""
+ },
+ {
+  "active_document": "Surat Undangan Penilaian Interviu Pemdi 2026.pdf",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi surat undangan ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "Surat ini mengundang perangkat daerah mengikuti Penilaian Interviu Evaluasi Kinerja Pemerintah Digital Tahun 2026 pada Kamis, 24 September 2026 pukul 08.30 WITA di Media Center Sekretariat Daerah Kab. Hulu Sungai Selatan, secara daring melalui Zoom Meeting."
+   }
+  ],
+  "question": "Apa tugas bidang statistik?",
+  "expected": false,
+  "note": "gagal di uji asli"
+ },
+ {
+  "active_document": "Surat Undangan Penilaian Interviu Pemdi 2026.pdf",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi surat undangan ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "Surat ini mengundang perangkat daerah mengikuti Penilaian Interviu Evaluasi Kinerja Pemerintah Digital Tahun 2026 pada Kamis, 24 September 2026 pukul 08.30 WITA di Media Center Sekretariat Daerah Kab. Hulu Sungai Selatan, secara daring melalui Zoom Meeting."
+   }
+  ],
+  "question": "Apa ibu kota Jepang?",
+  "expected": false,
+  "note": ""
+ },
+ {
+  "active_document": "Surat Undangan Penilaian Interviu Pemdi 2026.pdf",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi surat undangan ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "Surat ini mengundang perangkat daerah mengikuti Penilaian Interviu Evaluasi Kinerja Pemerintah Digital Tahun 2026 pada Kamis, 24 September 2026 pukul 08.30 WITA di Media Center Sekretariat Daerah Kab. Hulu Sungai Selatan, secara daring melalui Zoom Meeting."
+   }
+  ],
+  "question": "Berapa jumlah chat hari ini?",
+  "expected": false,
+  "note": ""
+ },
+ {
+  "active_document": "Surat Undangan Penilaian Interviu Pemdi 2026.pdf",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi surat undangan ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "Surat ini mengundang perangkat daerah mengikuti Penilaian Interviu Evaluasi Kinerja Pemerintah Digital Tahun 2026 pada Kamis, 24 September 2026 pukul 08.30 WITA di Media Center Sekretariat Daerah Kab. Hulu Sungai Selatan, secara daring melalui Zoom Meeting."
+   }
+  ],
+  "question": "Terima kasih",
+  "expected": false,
+  "note": ""
+ },
+ {
+  "active_document": "Surat Undangan Penilaian Interviu Pemdi 2026.pdf",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi surat undangan ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "Surat ini mengundang perangkat daerah mengikuti Penilaian Interviu Evaluasi Kinerja Pemerintah Digital Tahun 2026 pada Kamis, 24 September 2026 pukul 08.30 WITA di Media Center Sekretariat Daerah Kab. Hulu Sungai Selatan, secara daring melalui Zoom Meeting."
+   }
+  ],
+  "question": "Bagaimana cara mengajukan subdomain?",
+  "expected": false,
+  "note": ""
+ },
+ {
+  "active_document": "Surat Undangan Penilaian Interviu Pemdi 2026.pdf",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi surat undangan ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "Surat ini mengundang perangkat daerah mengikuti Penilaian Interviu Evaluasi Kinerja Pemerintah Digital Tahun 2026 pada Kamis, 24 September 2026 pukul 08.30 WITA di Media Center Sekretariat Daerah Kab. Hulu Sungai Selatan, secara daring melalui Zoom Meeting."
+   }
+  ],
+  "question": "Apa itu SPBE?",
+  "expected": false,
+  "note": ""
+ },
+ {
+  "active_document": "Surat Undangan Penilaian Interviu Pemdi 2026.pdf",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi surat undangan ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "Surat ini mengundang perangkat daerah mengikuti Penilaian Interviu Evaluasi Kinerja Pemerintah Digital Tahun 2026 pada Kamis, 24 September 2026 pukul 08.30 WITA di Media Center Sekretariat Daerah Kab. Hulu Sungai Selatan, secara daring melalui Zoom Meeting."
+   }
+  ],
+  "question": "Siapa kamu?",
+  "expected": false,
+  "note": ""
+ },
+ {
+  "active_document": "Surat Undangan Penilaian Interviu Pemdi 2026.pdf",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi surat undangan ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "Surat ini mengundang perangkat daerah mengikuti Penilaian Interviu Evaluasi Kinerja Pemerintah Digital Tahun 2026 pada Kamis, 24 September 2026 pukul 08.30 WITA di Media Center Sekretariat Daerah Kab. Hulu Sungai Selatan, secara daring melalui Zoom Meeting."
+   }
+  ],
+  "question": "Buatkan pantun tentang kopi",
+  "expected": false,
+  "note": ""
+ },
+ {
+  "active_document": "Surat Undangan Penilaian Interviu Pemdi 2026.pdf",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi surat undangan ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "Surat ini mengundang perangkat daerah mengikuti Penilaian Interviu Evaluasi Kinerja Pemerintah Digital Tahun 2026 pada Kamis, 24 September 2026 pukul 08.30 WITA di Media Center Sekretariat Daerah Kab. Hulu Sungai Selatan, secara daring melalui Zoom Meeting."
+   }
+  ],
+  "question": "Apa saja layanan TI yang disediakan Diskominfo?",
+  "expected": false,
+  "note": ""
+ },
+ {
+  "active_document": "Surat Undangan Penilaian Interviu Pemdi 2026.pdf",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi surat undangan ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "Surat ini mengundang perangkat daerah mengikuti Penilaian Interviu Evaluasi Kinerja Pemerintah Digital Tahun 2026 pada Kamis, 24 September 2026 pukul 08.30 WITA di Media Center Sekretariat Daerah Kab. Hulu Sungai Selatan, secara daring melalui Zoom Meeting."
+   }
+  ],
+  "question": "Berapa harga laptop di berita acara survei?",
+  "expected": false,
+  "note": ""
+ },
+ {
+  "active_document": "SPT SINAU JOGJA AI ENGINEER.docx",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi SPT ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "SPT Nomor 800.1.11.1/363/DiskominfoSP/2026 menugaskan enam pegawai Diskominfo mengikuti Pelatihan Artificial Intelligence Engineer dan Persiapan Uji Kompetensi BNSP pada 20-23 September 2026 di In Hotel Banjarbaru."
+   }
+  ],
+  "question": "Siapa saja yang ditugaskan?",
+  "expected": true,
+  "note": ""
+ },
+ {
+  "active_document": "SPT SINAU JOGJA AI ENGINEER.docx",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi SPT ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "SPT Nomor 800.1.11.1/363/DiskominfoSP/2026 menugaskan enam pegawai Diskominfo mengikuti Pelatihan Artificial Intelligence Engineer dan Persiapan Uji Kompetensi BNSP pada 20-23 September 2026 di In Hotel Banjarbaru."
+   }
+  ],
+  "question": "Kapan pelatihannya?",
+  "expected": true,
+  "note": ""
+ },
+ {
+  "active_document": "SPT SINAU JOGJA AI ENGINEER.docx",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi SPT ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "SPT Nomor 800.1.11.1/363/DiskominfoSP/2026 menugaskan enam pegawai Diskominfo mengikuti Pelatihan Artificial Intelligence Engineer dan Persiapan Uji Kompetensi BNSP pada 20-23 September 2026 di In Hotel Banjarbaru."
+   }
+  ],
+  "question": "Di mana tempat pelatihannya?",
+  "expected": true,
+  "note": ""
+ },
+ {
+  "active_document": "SPT SINAU JOGJA AI ENGINEER.docx",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi SPT ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "SPT Nomor 800.1.11.1/363/DiskominfoSP/2026 menugaskan enam pegawai Diskominfo mengikuti Pelatihan Artificial Intelligence Engineer dan Persiapan Uji Kompetensi BNSP pada 20-23 September 2026 di In Hotel Banjarbaru."
+   }
+  ],
+  "question": "Apa dasar SPT ini?",
+  "expected": true,
+  "note": ""
+ },
+ {
+  "active_document": "SPT SINAU JOGJA AI ENGINEER.docx",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi SPT ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "SPT Nomor 800.1.11.1/363/DiskominfoSP/2026 menugaskan enam pegawai Diskominfo mengikuti Pelatihan Artificial Intelligence Engineer dan Persiapan Uji Kompetensi BNSP pada 20-23 September 2026 di In Hotel Banjarbaru."
+   }
+  ],
+  "question": "Siapa yang menandatangani SPT ini?",
+  "expected": true,
+  "note": ""
+ },
+ {
+  "active_document": "SPT SINAU JOGJA AI ENGINEER.docx",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi SPT ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "SPT Nomor 800.1.11.1/363/DiskominfoSP/2026 menugaskan enam pegawai Diskominfo mengikuti Pelatihan Artificial Intelligence Engineer dan Persiapan Uji Kompetensi BNSP pada 20-23 September 2026 di In Hotel Banjarbaru."
+   }
+  ],
+  "question": "Apa jabatan Rahmad?",
+  "expected": true,
+  "note": ""
+ },
+ {
+  "active_document": "SPT SINAU JOGJA AI ENGINEER.docx",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi SPT ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "SPT Nomor 800.1.11.1/363/DiskominfoSP/2026 menugaskan enam pegawai Diskominfo mengikuti Pelatihan Artificial Intelligence Engineer dan Persiapan Uji Kompetensi BNSP pada 20-23 September 2026 di In Hotel Banjarbaru."
+   }
+  ],
+  "question": "Berapa orang yang ditugaskan?",
+  "expected": true,
+  "note": ""
+ },
+ {
+  "active_document": "SPT SINAU JOGJA AI ENGINEER.docx",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi SPT ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "SPT Nomor 800.1.11.1/363/DiskominfoSP/2026 menugaskan enam pegawai Diskominfo mengikuti Pelatihan Artificial Intelligence Engineer dan Persiapan Uji Kompetensi BNSP pada 20-23 September 2026 di In Hotel Banjarbaru."
+   }
+  ],
+  "question": "Pelatihan apa yang diikuti?",
+  "expected": true,
+  "note": ""
+ },
+ {
+  "active_document": "SPT SINAU JOGJA AI ENGINEER.docx",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi SPT ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "SPT Nomor 800.1.11.1/363/DiskominfoSP/2026 menugaskan enam pegawai Diskominfo mengikuti Pelatihan Artificial Intelligence Engineer dan Persiapan Uji Kompetensi BNSP pada 20-23 September 2026 di In Hotel Banjarbaru."
+   }
+  ],
+  "question": "Apa golongan Muhammad Nasrullah?",
+  "expected": true,
+  "note": ""
+ },
+ {
+  "active_document": "SPT SINAU JOGJA AI ENGINEER.docx",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi SPT ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "SPT Nomor 800.1.11.1/363/DiskominfoSP/2026 menugaskan enam pegawai Diskominfo mengikuti Pelatihan Artificial Intelligence Engineer dan Persiapan Uji Kompetensi BNSP pada 20-23 September 2026 di In Hotel Banjarbaru."
+   }
+  ],
+  "question": "Siapa penyelenggara pelatihannya?",
+  "expected": true,
+  "note": ""
+ },
+ {
+  "active_document": "SPT SINAU JOGJA AI ENGINEER.docx",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi SPT ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "SPT Nomor 800.1.11.1/363/DiskominfoSP/2026 menugaskan enam pegawai Diskominfo mengikuti Pelatihan Artificial Intelligence Engineer dan Persiapan Uji Kompetensi BNSP pada 20-23 September 2026 di In Hotel Banjarbaru."
+   }
+  ],
+  "question": "Bagaimana cara meminjam ruang Media Center?",
+  "expected": false,
+  "note": ""
+ },
+ {
+  "active_document": "SPT SINAU JOGJA AI ENGINEER.docx",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi SPT ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "SPT Nomor 800.1.11.1/363/DiskominfoSP/2026 menugaskan enam pegawai Diskominfo mengikuti Pelatihan Artificial Intelligence Engineer dan Persiapan Uji Kompetensi BNSP pada 20-23 September 2026 di In Hotel Banjarbaru."
+   }
+  ],
+  "question": "Apa ibu kota Jepang?",
+  "expected": false,
+  "note": ""
+ },
+ {
+  "active_document": "SPT SINAU JOGJA AI ENGINEER.docx",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi SPT ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "SPT Nomor 800.1.11.1/363/DiskominfoSP/2026 menugaskan enam pegawai Diskominfo mengikuti Pelatihan Artificial Intelligence Engineer dan Persiapan Uji Kompetensi BNSP pada 20-23 September 2026 di In Hotel Banjarbaru."
+   }
+  ],
+  "question": "Ada berapa dokumen yang tersimpan?",
+  "expected": false,
+  "note": ""
+ },
+ {
+  "active_document": "SPT SINAU JOGJA AI ENGINEER.docx",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi SPT ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "SPT Nomor 800.1.11.1/363/DiskominfoSP/2026 menugaskan enam pegawai Diskominfo mengikuti Pelatihan Artificial Intelligence Engineer dan Persiapan Uji Kompetensi BNSP pada 20-23 September 2026 di In Hotel Banjarbaru."
+   }
+  ],
+  "question": "Halo selamat pagi",
+  "expected": false,
+  "note": ""
+ },
+ {
+  "active_document": "SPT SINAU JOGJA AI ENGINEER.docx",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi SPT ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "SPT Nomor 800.1.11.1/363/DiskominfoSP/2026 menugaskan enam pegawai Diskominfo mengikuti Pelatihan Artificial Intelligence Engineer dan Persiapan Uji Kompetensi BNSP pada 20-23 September 2026 di In Hotel Banjarbaru."
+   }
+  ],
+  "question": "Apa saja syarat permohonan layanan hosting?",
+  "expected": false,
+  "note": ""
+ },
+ {
+  "active_document": "SPT SINAU JOGJA AI ENGINEER.docx",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi SPT ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "SPT Nomor 800.1.11.1/363/DiskominfoSP/2026 menugaskan enam pegawai Diskominfo mengikuti Pelatihan Artificial Intelligence Engineer dan Persiapan Uji Kompetensi BNSP pada 20-23 September 2026 di In Hotel Banjarbaru."
+   }
+  ],
+  "question": "Apa itu e-purchasing?",
+  "expected": false,
+  "note": ""
+ },
+ {
+  "active_document": "SPT SINAU JOGJA AI ENGINEER.docx",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi SPT ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "SPT Nomor 800.1.11.1/363/DiskominfoSP/2026 menugaskan enam pegawai Diskominfo mengikuti Pelatihan Artificial Intelligence Engineer dan Persiapan Uji Kompetensi BNSP pada 20-23 September 2026 di In Hotel Banjarbaru."
+   }
+  ],
+  "question": "Kamu siapa?",
+  "expected": false,
+  "note": ""
+ },
+ {
+  "active_document": "SPT SINAU JOGJA AI ENGINEER.docx",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi SPT ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "SPT Nomor 800.1.11.1/363/DiskominfoSP/2026 menugaskan enam pegawai Diskominfo mengikuti Pelatihan Artificial Intelligence Engineer dan Persiapan Uji Kompetensi BNSP pada 20-23 September 2026 di In Hotel Banjarbaru."
+   }
+  ],
+  "question": "Tuliskan puisi tentang hujan",
+  "expected": false,
+  "note": ""
+ },
+ {
+  "active_document": "SPT SINAU JOGJA AI ENGINEER.docx",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi SPT ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "SPT Nomor 800.1.11.1/363/DiskominfoSP/2026 menugaskan enam pegawai Diskominfo mengikuti Pelatihan Artificial Intelligence Engineer dan Persiapan Uji Kompetensi BNSP pada 20-23 September 2026 di In Hotel Banjarbaru."
+   }
+  ],
+  "question": "Apa tugas pokok Diskominfo?",
+  "expected": false,
+  "note": ""
+ },
+ {
+  "active_document": "SPT SINAU JOGJA AI ENGINEER.docx",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi SPT ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "SPT Nomor 800.1.11.1/363/DiskominfoSP/2026 menugaskan enam pegawai Diskominfo mengikuti Pelatihan Artificial Intelligence Engineer dan Persiapan Uji Kompetensi BNSP pada 20-23 September 2026 di In Hotel Banjarbaru."
+   }
+  ],
+  "question": "Kapan penilaian interviu Pemdi dilaksanakan?",
+  "expected": false,
+  "note": ""
+ },
+ {
+  "active_document": "Surat Undangan Penilaian Interviu Pemdi 2026.pdf",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi surat undangan ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "Surat ini mengundang perangkat daerah mengikuti Penilaian Interviu Evaluasi Kinerja Pemerintah Digital Tahun 2026 pada Kamis, 24 September 2026 pukul 08.30 WITA di Media Center Sekretariat Daerah Kab. Hulu Sungai Selatan, secara daring melalui Zoom Meeting."
+   }
+  ],
+  "question": "Zoom-nya pakai link apa?",
+  "expected": true,
+  "note": "holdout: tidak dipakai saat menyusun aturan"
+ },
+ {
+  "active_document": "Surat Undangan Penilaian Interviu Pemdi 2026.pdf",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi surat undangan ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "Surat ini mengundang perangkat daerah mengikuti Penilaian Interviu Evaluasi Kinerja Pemerintah Digital Tahun 2026 pada Kamis, 24 September 2026 pukul 08.30 WITA di Media Center Sekretariat Daerah Kab. Hulu Sungai Selatan, secara daring melalui Zoom Meeting."
+   }
+  ],
+  "question": "Pakaiannya harus apa?",
+  "expected": true,
+  "note": "holdout: tidak dipakai saat menyusun aturan"
+ },
+ {
+  "active_document": "Surat Undangan Penilaian Interviu Pemdi 2026.pdf",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi surat undangan ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "Surat ini mengundang perangkat daerah mengikuti Penilaian Interviu Evaluasi Kinerja Pemerintah Digital Tahun 2026 pada Kamis, 24 September 2026 pukul 08.30 WITA di Media Center Sekretariat Daerah Kab. Hulu Sungai Selatan, secara daring melalui Zoom Meeting."
+   }
+  ],
+  "question": "Siapa pengirim undangan tersebut?",
+  "expected": true,
+  "note": "holdout: tidak dipakai saat menyusun aturan"
+ },
+ {
+  "active_document": "Surat Undangan Penilaian Interviu Pemdi 2026.pdf",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi surat undangan ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "Surat ini mengundang perangkat daerah mengikuti Penilaian Interviu Evaluasi Kinerja Pemerintah Digital Tahun 2026 pada Kamis, 24 September 2026 pukul 08.30 WITA di Media Center Sekretariat Daerah Kab. Hulu Sungai Selatan, secara daring melalui Zoom Meeting."
+   }
+  ],
+  "question": "Inspektur Daerah ikut diundang tidak?",
+  "expected": true,
+  "note": "holdout: tidak dipakai saat menyusun aturan"
+ },
+ {
+  "active_document": "Surat Undangan Penilaian Interviu Pemdi 2026.pdf",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi surat undangan ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "Surat ini mengundang perangkat daerah mengikuti Penilaian Interviu Evaluasi Kinerja Pemerintah Digital Tahun 2026 pada Kamis, 24 September 2026 pukul 08.30 WITA di Media Center Sekretariat Daerah Kab. Hulu Sungai Selatan, secara daring melalui Zoom Meeting."
+   }
+  ],
+  "question": "Bagaimana prosedur pengajuan surat permohonan layanan?",
+  "expected": false,
+  "note": "holdout: tidak dipakai saat menyusun aturan"
+ },
+ {
+  "active_document": "Surat Undangan Penilaian Interviu Pemdi 2026.pdf",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi surat undangan ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "Surat ini mengundang perangkat daerah mengikuti Penilaian Interviu Evaluasi Kinerja Pemerintah Digital Tahun 2026 pada Kamis, 24 September 2026 pukul 08.30 WITA di Media Center Sekretariat Daerah Kab. Hulu Sungai Selatan, secara daring melalui Zoom Meeting."
+   }
+  ],
+  "question": "Apa bedanya SPBE dan e-government?",
+  "expected": false,
+  "note": "holdout: tidak dipakai saat menyusun aturan"
+ },
+ {
+  "active_document": "Surat Undangan Penilaian Interviu Pemdi 2026.pdf",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi surat undangan ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "Surat ini mengundang perangkat daerah mengikuti Penilaian Interviu Evaluasi Kinerja Pemerintah Digital Tahun 2026 pada Kamis, 24 September 2026 pukul 08.30 WITA di Media Center Sekretariat Daerah Kab. Hulu Sungai Selatan, secara daring melalui Zoom Meeting."
+   }
+  ],
+  "question": "Tolong buatkan pantun perpisahan",
+  "expected": false,
+  "note": "holdout: tidak dipakai saat menyusun aturan"
+ },
+ {
+  "active_document": "Surat Undangan Penilaian Interviu Pemdi 2026.pdf",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi surat undangan ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "Surat ini mengundang perangkat daerah mengikuti Penilaian Interviu Evaluasi Kinerja Pemerintah Digital Tahun 2026 pada Kamis, 24 September 2026 pukul 08.30 WITA di Media Center Sekretariat Daerah Kab. Hulu Sungai Selatan, secara daring melalui Zoom Meeting."
+   }
+  ],
+  "question": "Ada berapa sesi percakapan saya?",
+  "expected": false,
+  "note": "holdout: tidak dipakai saat menyusun aturan"
+ },
+ {
+  "active_document": "SPT SINAU JOGJA AI ENGINEER.docx",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi SPT ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "SPT Nomor 800.1.11.1/363/DiskominfoSP/2026 menugaskan enam pegawai Diskominfo mengikuti Pelatihan Artificial Intelligence Engineer dan Persiapan Uji Kompetensi BNSP pada 20-23 September 2026 di In Hotel Banjarbaru."
+   }
+  ],
+  "question": "Muhammad Noor Yusuf jabatannya apa?",
+  "expected": true,
+  "note": "holdout: tidak dipakai saat menyusun aturan"
+ },
+ {
+  "active_document": "SPT SINAU JOGJA AI ENGINEER.docx",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi SPT ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "SPT Nomor 800.1.11.1/363/DiskominfoSP/2026 menugaskan enam pegawai Diskominfo mengikuti Pelatihan Artificial Intelligence Engineer dan Persiapan Uji Kompetensi BNSP pada 20-23 September 2026 di In Hotel Banjarbaru."
+   }
+  ],
+  "question": "Hotelnya di kota mana?",
+  "expected": true,
+  "note": "holdout: tidak dipakai saat menyusun aturan"
+ },
+ {
+  "active_document": "SPT SINAU JOGJA AI ENGINEER.docx",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi SPT ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "SPT Nomor 800.1.11.1/363/DiskominfoSP/2026 menugaskan enam pegawai Diskominfo mengikuti Pelatihan Artificial Intelligence Engineer dan Persiapan Uji Kompetensi BNSP pada 20-23 September 2026 di In Hotel Banjarbaru."
+   }
+  ],
+  "question": "Sampai tanggal berapa tugasnya?",
+  "expected": true,
+  "note": "holdout: tidak dipakai saat menyusun aturan"
+ },
+ {
+  "active_document": "SPT SINAU JOGJA AI ENGINEER.docx",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi SPT ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "SPT Nomor 800.1.11.1/363/DiskominfoSP/2026 menugaskan enam pegawai Diskominfo mengikuti Pelatihan Artificial Intelligence Engineer dan Persiapan Uji Kompetensi BNSP pada 20-23 September 2026 di In Hotel Banjarbaru."
+   }
+  ],
+  "question": "NIP Rahman Hakim berapa?",
+  "expected": true,
+  "note": "holdout: tidak dipakai saat menyusun aturan"
+ },
+ {
+  "active_document": "SPT SINAU JOGJA AI ENGINEER.docx",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi SPT ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "SPT Nomor 800.1.11.1/363/DiskominfoSP/2026 menugaskan enam pegawai Diskominfo mengikuti Pelatihan Artificial Intelligence Engineer dan Persiapan Uji Kompetensi BNSP pada 20-23 September 2026 di In Hotel Banjarbaru."
+   }
+  ],
+  "question": "Apa isi katalog layanan TI?",
+  "expected": false,
+  "note": "holdout: tidak dipakai saat menyusun aturan"
+ },
+ {
+  "active_document": "SPT SINAU JOGJA AI ENGINEER.docx",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi SPT ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "SPT Nomor 800.1.11.1/363/DiskominfoSP/2026 menugaskan enam pegawai Diskominfo mengikuti Pelatihan Artificial Intelligence Engineer dan Persiapan Uji Kompetensi BNSP pada 20-23 September 2026 di In Hotel Banjarbaru."
+   }
+  ],
+  "question": "Bagaimana meminjam Media Center Setda?",
+  "expected": false,
+  "note": "holdout: tidak dipakai saat menyusun aturan"
+ },
+ {
+  "active_document": "SPT SINAU JOGJA AI ENGINEER.docx",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi SPT ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "SPT Nomor 800.1.11.1/363/DiskominfoSP/2026 menugaskan enam pegawai Diskominfo mengikuti Pelatihan Artificial Intelligence Engineer dan Persiapan Uji Kompetensi BNSP pada 20-23 September 2026 di In Hotel Banjarbaru."
+   }
+  ],
+  "question": "Siapa presiden pertama Indonesia?",
+  "expected": false,
+  "note": "holdout: tidak dipakai saat menyusun aturan"
+ },
+ {
+  "active_document": "SPT SINAU JOGJA AI ENGINEER.docx",
+  "history": [
+   {
+    "role": "user",
+    "content": "Apa isi SPT ini?"
+   },
+   {
+    "role": "assistant",
+    "content": "SPT Nomor 800.1.11.1/363/DiskominfoSP/2026 menugaskan enam pegawai Diskominfo mengikuti Pelatihan Artificial Intelligence Engineer dan Persiapan Uji Kompetensi BNSP pada 20-23 September 2026 di In Hotel Banjarbaru."
+   }
+  ],
+  "question": "Selamat siang",
+  "expected": false,
+  "note": "holdout: tidak dipakai saat menyusun aturan"
+ }
+]

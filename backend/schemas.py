@@ -97,6 +97,11 @@ class DocumentListItem(BaseModel):
     filename: str
     chunk_count: int
     uploaded_at: datetime
+    access_level: str
+
+
+class DocumentAccessUpdate(BaseModel):
+    access_level: str
 
 class UploadResponse(BaseModel):
     """

@@ -99,6 +99,9 @@ def _get_readonly_sessionmaker() -> sessionmaker:
 #   - chat_history hanya berisi baris milik pengguna yang bertanya. Role
 #     readonly punya SELECT ke SELURUH chat_history, jadi tanpa ini
 #     "tampilkan pesan terakhir" bisa membocorkan percakapan pengguna lain.
+#   - documents hanya berisi dokumen yang boleh dibaca penanya (tingkat akses
+#     sesuai role, lihat access.py) — tanpa ini "tampilkan isi dokumen"
+#     lewat SQL melewati hak akses per dokumen.
 #   - documents tanpa kolom embedding (vektor 768 angka per baris tidak
 #     berguna bagi LLM dan cuma memenuhi jendela konteks).
 _SCOPED_QUERY = """WITH chat_history AS (
@@ -106,6 +109,7 @@ _SCOPED_QUERY = """WITH chat_history AS (
     FROM public.chat_history WHERE user_id = :scope_user_id
 ), documents AS (
     SELECT id, filename, content, created_at FROM public.documents
+    WHERE access_level = ANY(:scope_levels)
 )
 SELECT * FROM ({query}) AS hasil LIMIT {limit}"""
 
@@ -204,7 +208,8 @@ def build_stats_query(question: str) -> tuple[str, str] | None:
     return None
 
 
-async def run_sql_query(query: str, db: Session = None, limit: int = 20, user_id: int | None = None) -> dict:
+async def run_sql_query(query: str, db: Session = None, limit: int = 20, user_id: int | None = None,
+                        levels=("umum",)) -> dict:
     """
     Jalankan query SQL read-only dengan batas hasil.
 
@@ -234,7 +239,7 @@ async def run_sql_query(query: str, db: Session = None, limit: int = 20, user_id
 
     session = _get_readonly_sessionmaker()()
     try:
-        result = session.execute(text(scoped), {"scope_user_id": user_id})
+        result = session.execute(text(scoped), {"scope_user_id": user_id, "scope_levels": list(levels)})
         rows = [dict(row._mapping) for row in result.fetchall()]
 
         return {

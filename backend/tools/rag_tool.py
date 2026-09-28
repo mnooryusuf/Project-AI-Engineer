@@ -8,7 +8,12 @@ import re
 from pathlib import Path
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from access import allowed_levels
 from models import Document
+
+# Default setiap fungsi di sini: hanya dokumen umum. Pemanggil yang lupa
+# mengoper tingkat akses gagal tertutup, bukan membuka dokumen internal.
+_PUBLIC = tuple(allowed_levels(None))
 from services.embedding_service import get_embedding
 from services.document_service import CHUNK_OVERLAP
 
@@ -63,8 +68,77 @@ SECONDARY_THRESHOLD = 0.45
 MAX_PER_DOCUMENT = 2
 NEIGHBORS = 1
 
+# Pelengkap kata kunci (hybrid ringan). Blok tanda tangan "Kepala Dinas,
+# Drs. HENDRO MARTONO, MT ... NIP" selalu berada di chunk yang sama dengan
+# kalimat penutup surat, sehingga skor embedding-nya terseret ke bawah:
+# untuk "Siapa nama kepala dinas kominfo hss?" chunk SPT dan PBJ yang memuat
+# nama hanya 0.449 dan 0.335 (di bawah SECONDARY_THRESHOLD), konteks tidak
+# memuat nama sama sekali, dan model mengarang "kepala dinas adalah saya
+# sendiri, Nanang" (uji e2e laporan v3). Kata kunci menemukan chunk itu
+# langsung. Hanya dipakai SETELAH gerbang SIMILARITY_THRESHOLD lolos, jadi
+# penolakan pertanyaan di luar topik tidak berubah.
+LEXICAL_EXTRA = 2
+LEXICAL_MIN_TERMS = 2
+_STOPWORDS = {
+    "siapa", "apa", "apakah", "nama", "namanya", "yang", "dan", "atau", "dari", "untuk", "dengan",
+    "pada", "dalam", "ini", "itu", "berapa", "bagaimana", "cara", "adalah", "saja", "bisa", "tolong",
+    "sebutkan", "jelaskan", "kapan", "dimana", "mana", "ada", "tentang", "oleh", "sebagai", "kah",
+}
 
-async def rag_search(query: str, db: Session, top_k: int = MAX_CHUNKS) -> dict:
+
+# Pertanyaan "siapa ..." jawabannya nama orang, jadi chunk yang memuat
+# penanda nama pejabat (NIP, gelar) didahulukan di antara kandidat kata kunci
+# yang sama kuat — daftar jabatan penerima undangan tidak memuat nama.
+WHO_QUESTION = re.compile(r"^\s*siapa\b", re.IGNORECASE)
+PERSON_SIGNAL = re.compile(
+    r"\bNIP\b|\b(Drs|Dra|Dr|Ir|Hj|H|Prof)\.\s|,\s*(S\.\w+|M\.\w+|MT|MM|SE|ST)\b"
+)
+
+
+def _query_terms(query: str) -> list[str]:
+    terms = [t for t in re.findall(r"[a-z0-9]+", query.lower()) if len(t) >= 3 and t not in _STOPWORDS]
+    return list(dict.fromkeys(terms))
+
+
+def _lexical_candidates(query: str, db: Session, levels=_PUBLIC, limit: int = 60) -> list:
+    """Chunk yang memuat minimal LEXICAL_MIN_TERMS kata penting dari
+    pertanyaan. Diurutkan menurut jumlah PASANGAN kata pertanyaan yang muncul
+    berurutan ("kepala dinas"), baru ts_rank_cd: tanpa itu daftar penerima
+    undangan yang menyebut "Kepala ... Kab. HSS" berkali-kali selalu menang
+    atas blok tanda tangan yang memuat nama pejabatnya. Chunk berisi
+    placeholder template («isi nama dan NIP») dilewati karena tidak memuat
+    fakta apa pun."""
+    terms = _query_terms(query)
+    if len(terms) < LEXICAL_MIN_TERMS:
+        return []
+    pairs = [f"{a} {b}" for a, b in zip(terms, terms[1:])]
+    wants_person = bool(WHO_QUESTION.search(query))
+    rows = db.execute(
+        text("""
+            SELECT id, filename, content,
+                   ts_rank_cd(to_tsvector('simple', content), to_tsquery('simple', :q)) AS rank
+            FROM documents
+            WHERE to_tsvector('simple', content) @@ to_tsquery('simple', :q)
+              AND access_level = ANY(:levels)
+            ORDER BY rank DESC
+            LIMIT :limit
+        """),
+        {"q": " | ".join(terms), "limit": limit, "levels": list(levels)},
+    ).fetchall()
+    scored = []
+    for r in rows:
+        if "«" in r.content:
+            continue
+        flat = " ".join(re.findall(r"[a-z0-9]+", r.content.lower()))
+        if sum(t in flat for t in terms) < LEXICAL_MIN_TERMS:
+            continue
+        person = wants_person and bool(PERSON_SIGNAL.search(r.content))
+        scored.append((sum(f" {p} " in f" {flat} " for p in pairs), person, r.rank, r))
+    scored.sort(key=lambda x: (x[0], x[1], x[2]), reverse=True)
+    return [x[-1] for x in scored]
+
+
+async def rag_search(query: str, db: Session, top_k: int = MAX_CHUNKS, levels=_PUBLIC) -> dict:
     """
     Cari dokumen yang relevan dengan query menggunakan cosine similarity.
     Mengembalikan context dan sumber dokumen.
@@ -76,10 +150,11 @@ async def rag_search(query: str, db: Session, top_k: int = MAX_CHUNKS) -> dict:
             SELECT id, filename,
                    1 - (embedding <=> CAST(:embedding AS vector)) AS similarity
             FROM documents
+            WHERE access_level = ANY(:levels)
             ORDER BY embedding <=> CAST(:embedding AS vector)
             LIMIT :candidates
         """),
-        {"embedding": str(query_embedding), "candidates": CANDIDATES},
+        {"embedding": str(query_embedding), "candidates": CANDIDATES, "levels": list(levels)},
     ).fetchall()
 
     # Urutan skor dipertahankan; tiap dokumen dibatasi supaya satu dokumen
@@ -96,12 +171,24 @@ async def rag_search(query: str, db: Session, top_k: int = MAX_CHUNKS) -> dict:
         per_doc[row.filename] = per_doc.get(row.filename, 0) + 1
         picked.append(row)
 
+    picked_ids = {r.id for r in picked}
+    extra = 0
+    for row in _lexical_candidates(query, db, levels):
+        if extra >= LEXICAL_EXTRA:
+            break
+        if row.id in picked_ids or per_doc.get(row.filename, 0) >= MAX_PER_DOCUMENT:
+            continue
+        per_doc[row.filename] = per_doc.get(row.filename, 0) + 1
+        picked.append(row)
+        picked_ids.add(row.id)
+        extra += 1
+
     # Tetangga (id +-NEIGHBORS dengan filename sama — chunk satu dokumen
     # disimpan berurutan) diambil sekaligus dalam satu query.
     wanted = {(r.filename, r.id + d) for r in picked for d in range(-NEIGHBORS, NEIGHBORS + 1)}
     chunks = db.execute(
-        text("SELECT id, filename, content FROM documents WHERE id = ANY(:ids)"),
-        {"ids": sorted({i for _, i in wanted})},
+        text("SELECT id, filename, content FROM documents WHERE id = ANY(:ids) AND access_level = ANY(:levels)"),
+        {"ids": sorted({i for _, i in wanted}), "levels": list(levels)},
     ).fetchall()
     chunks = [c for c in chunks if (c.filename, c.id) in wanted]
 
@@ -145,12 +232,40 @@ DOCUMENT_FOCUS_MAX_CHARS = 12000
 ACTIVE_DOCUMENT_MARGIN = 0.05
 
 
-async def active_document_wins(db: Session, active_document: str, question: str) -> bool:
+async def active_document_wins(db: Session, active_document: str, question: str, levels=_PUBLIC) -> bool:
     """True kalau chunk terbaik dokumen aktif lebih mirip dengan pertanyaan
     daripada chunk terbaik dokumen LAIN mana pun. Membandingkan, bukan
     memakai ambang: skor mutlak lanjutan dan pindah topik saling tumpang
     tindih, tapi pada pindah topik asli dokumen lain selalu menang jauh
     (Media Center +0.50, SPBE +0.33)."""
+    own, other = await active_document_scores(db, active_document, question, levels)
+    return own is not None and (other is None or own >= other - ACTIVE_DOCUMENT_MARGIN)
+
+
+def document_visible(db: Session, filename: str, levels=_PUBLIC) -> bool:
+    """Apakah dokumen ini ada di knowledge base DAN boleh dibaca dengan
+    tingkat akses ini."""
+    return db.execute(
+        text("SELECT 1 FROM documents WHERE filename = :f AND access_level = ANY(:levels) LIMIT 1"),
+        {"f": filename, "levels": list(levels)},
+    ).first() is not None
+
+
+def document_contains_any(db: Session, filename: str, words: list[str], levels=_PUBLIC) -> bool:
+    """Apakah isi dokumen `filename` memuat salah satu kata ini (tanpa
+    membedakan huruf besar/kecil)."""
+    if not words:
+        return False
+    clauses = " OR ".join(f"content ILIKE :w{i}" for i in range(len(words)))
+    params = {"f": filename, "levels": list(levels), **{f"w{i}": f"%{w}%" for i, w in enumerate(words)}}
+    return db.execute(
+        text(f"SELECT 1 FROM documents WHERE filename = :f AND access_level = ANY(:levels) AND ({clauses}) LIMIT 1"),
+        params
+    ).first() is not None
+
+
+async def active_document_scores(db: Session, active_document: str, question: str, levels=_PUBLIC) -> tuple:
+    """(skor chunk terbaik dokumen aktif, skor chunk terbaik dokumen lain)."""
     embedding = str(await get_embedding(question))
     row = db.execute(
         text("""
@@ -158,13 +273,14 @@ async def active_document_wins(db: Session, active_document: str, question: str)
                 MAX(1 - (embedding <=> CAST(:e AS vector))) FILTER (WHERE filename = :f) AS own,
                 MAX(1 - (embedding <=> CAST(:e AS vector))) FILTER (WHERE filename <> :f) AS other
             FROM documents
+            WHERE access_level = ANY(:levels)
         """),
-        {"e": embedding, "f": active_document},
+        {"e": embedding, "f": active_document, "levels": list(levels)},
     ).first()
-    return row.own is not None and (row.other is None or row.own >= row.other - ACTIVE_DOCUMENT_MARGIN)
+    return row.own, row.other
 
 
-async def _select_relevant_chunks(db: Session, document_filename: str, question: str) -> str:
+async def _select_relevant_chunks(db: Session, document_filename: str, question: str, levels=_PUBLIC) -> str:
     """Untuk dokumen yang melebihi anggaran: chunk pertama selalu ikut
     (biasanya judul/kop/identitas dokumen), sisanya dipilih berdasarkan
     kemiripan dengan pertanyaan DI DALAM dokumen ini saja, lalu diurutkan
@@ -174,10 +290,10 @@ async def _select_relevant_chunks(db: Session, document_filename: str, question:
         text("""
             SELECT id, content
             FROM documents
-            WHERE filename = :filename
+            WHERE filename = :filename AND access_level = ANY(:levels)
             ORDER BY embedding <=> CAST(:embedding AS vector)
         """),
-        {"filename": document_filename, "embedding": str(query_embedding)},
+        {"filename": document_filename, "embedding": str(query_embedding), "levels": list(levels)},
     ).fetchall()
     first = min(ranked, key=lambda r: r.id)
 
@@ -203,7 +319,7 @@ async def _select_relevant_chunks(db: Session, document_filename: str, question:
     return "".join(out)
 
 
-async def document_focus_context(db: Session, document_filename: str, question: str) -> str:
+async def document_focus_context(db: Session, document_filename: str, question: str, levels=_PUBLIC) -> str:
     """Ambil isi dokumen untuk DOCUMENT_FOCUS.
 
     Dokumen yang muat DOCUMENT_FOCUS_MAX_CHARS dikirim UTUH (overlap
@@ -212,7 +328,7 @@ async def document_focus_context(db: Session, document_filename: str, question: 
     """
     rows = (
         db.query(Document.content)
-        .filter(Document.filename == document_filename)
+        .filter(Document.filename == document_filename, Document.access_level.in_(list(levels)))
         .order_by(Document.id)
         .all()
     )
@@ -221,7 +337,7 @@ async def document_focus_context(db: Session, document_filename: str, question: 
 
     total = sum(len(r.content) for r in rows) - CHUNK_OVERLAP * (len(rows) - 1)
     if total > DOCUMENT_FOCUS_MAX_CHARS:
-        return await _select_relevant_chunks(db, document_filename, question)
+        return await _select_relevant_chunks(db, document_filename, question, levels)
     return rows[0].content + "".join(r.content[CHUNK_OVERLAP:] for r in rows[1:])
 
 
@@ -229,7 +345,7 @@ def _normalize_name(text: str) -> str:
     return " ".join(re.sub(r"[^0-9a-z]+", " ", text.lower()).split())
 
 
-def find_mentioned_document(question: str, db: Session) -> str | None:
+def find_mentioned_document(question: str, db: Session, levels=_PUBLIC) -> str | None:
     """Dokumen di knowledge base yang namanya disebut di pertanyaan.
 
     Tanpa ini, menyebut nama dokumen di percakapan baru tidak ada gunanya:
@@ -243,7 +359,7 @@ def find_mentioned_document(question: str, db: Session) -> str | None:
     """
     q = f" {_normalize_name(question)} "
     best, best_len = None, 0
-    for (filename,) in db.query(Document.filename).distinct():
+    for (filename,) in db.query(Document.filename).filter(Document.access_level.in_(list(levels))).distinct():
         stem = _normalize_name(Path(filename).stem)
         candidates = [_normalize_name(filename)]
         if len(stem) >= 5:

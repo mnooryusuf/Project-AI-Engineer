@@ -34,7 +34,7 @@ const formatBytes = (bytes) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSidebar, attachRequest }) {
+export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSidebar, attachRequest, role }) {
   const [messages, setMessages]   = useState([])
   const [input, setInput]         = useState('')
   const [loading, setLoading]     = useState(false)
@@ -137,7 +137,9 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
   const notify = (msg, isError = false) => {
     if (isError) setError(msg)
     else setNotify(msg)
-    setTimeout(() => { setError(''); setNotify('') }, 4000)
+    // Pesan panjang (mis. "tingkat akses dinaikkan ke internal karena dokumen
+    // memuat NIP") perlu waktu baca lebih lama dari 4 detik.
+    setTimeout(() => { setError(''); setNotify('') }, Math.min(12000, 4000 + msg.length * 40))
   }
 
   const handleSend = async () => {
@@ -196,6 +198,13 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
               streaming: true,
             },
           ])
+        },
+        // Dikirim setelah jawaban selesai bila jawabannya "tidak ada di
+        // dokumen": sumber dikosongkan supaya tidak tampil sebagai sitasi.
+        onMetaUpdate: (update) => {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === assistantMsgId ? { ...m, sources: update.sources } : m))
+          )
         },
         onToken: (chunk) => {
           setMessages((prev) =>
@@ -547,6 +556,7 @@ export default function ChatBox({ sessionId, onMessageSent, onLogout, onToggleSi
               onJobStarted={handleJobStarted}
               onError={(msg) => notify(msg, true)}
               processing={uploadProcessing}
+              role={role}
             />
           </div>
 

@@ -17,6 +17,10 @@ Jalankan dari direktori backend/:
     .venv/bin/python3 reindex_documents.py                    # tampilkan rencana saja
     .venv/bin/python3 reindex_documents.py --apply            # jalankan
     .venv/bin/python3 reindex_documents.py --images --apply   # OCR ulang gambar saja
+    .venv/bin/python3 reindex_documents.py --pdf --apply      # ekstrak ulang PDF saja
+
+--pdf dipakai saat cara ekstraksi teks PDF berubah (lihat
+services/document_service._pdf_text_layer); dokumen lain tidak disentuh.
 """
 import asyncio
 import os
@@ -47,12 +51,20 @@ def is_image(name: str) -> bool:
     return os.path.splitext(name)[1].lower() in IMAGE_EXTENSIONS
 
 
+# Tingkat akses & pengunggah tiap dokumen, dibaca SEBELUM baris dihapus
+# supaya membangun ulang tidak mengembalikan semua dokumen ke "internal".
+_ACCESS: dict[str, tuple[str, int | None]] = {}
+
+
 async def rebuild_one(name: str, path: str, db) -> int:
+    level, owner = _ACCESS.get(name, ("internal", None))
     if is_image(name):
         hasil = await extract_text_from_image(path)
         teks = hasil["text"] if hasil.get("success") else ""
-        return await store_text_as_document(teks, name, db, {"source": "ocr"}) if teks.strip() else 0
-    return await process_and_store_document(path, name, db)
+        return await store_text_as_document(
+            teks, name, db, {"source": "ocr"}, access_level=level, uploaded_by=owner
+        ) if teks.strip() else 0
+    return await process_and_store_document(path, name, db, access_level=level, uploaded_by=owner)
 
 
 def source_files_by_original_name() -> dict[str, str]:
@@ -70,14 +82,22 @@ def source_files_by_original_name() -> dict[str, str]:
     return result
 
 
-async def main(apply: bool, images_only: bool) -> int:
+async def main(apply: bool, images_only: bool, pdf_only: bool = False) -> int:
     db = SessionLocal()
     indexed = [r[0] for r in db.execute(
         sqltext("SELECT DISTINCT filename FROM documents ORDER BY 1")
     ).fetchall()]
     if images_only:
         indexed = [f for f in indexed if is_image(f)]
+    if pdf_only:
+        indexed = [f for f in indexed if f.lower().endswith(".pdf")]
     available = source_files_by_original_name()
+    _ACCESS.update({
+        r.filename: (r.access_level, r.uploaded_by)
+        for r in db.execute(sqltext(
+            "SELECT DISTINCT ON (filename) filename, access_level, uploaded_by FROM documents ORDER BY filename, id"
+        )).fetchall()
+    })
 
     rebuildable = [f for f in indexed if f in available]
     missing = [f for f in indexed if f not in available]
@@ -103,6 +123,22 @@ async def main(apply: bool, images_only: bool) -> int:
         print("atau kembalikan filenya ke storage/uploads/.")
         db.close()
         return 1
+
+    if pdf_only:
+        # Versi baru disimpan dulu, baru chunk lama dihapus — kalau ekstraksi
+        # gagal di tengah jalan, dokumen lama tetap utuh.
+        total = 0
+        for name in rebuildable:
+            old_max = db.execute(sqltext("SELECT MAX(id) FROM documents WHERE filename = :f"), {"f": name}).scalar()
+            chunks = await rebuild_one(name, available[name], db)
+            if chunks > 0:
+                db.execute(sqltext("DELETE FROM documents WHERE filename = :f AND id <= :m"), {"f": name, "m": old_max})
+                db.commit()
+            total += chunks
+            print(f"   {name}: {chunks} chunk" + ("" if chunks else "  (GAGAL — versi lama dipertahankan)"))
+        db.close()
+        print(f"\nSelesai. {len(rebuildable)} PDF, {total} chunk.")
+        return 0
 
     if images_only:
         # Dimensi embedding tidak berubah, jadi cukup ganti baris milik
@@ -142,4 +178,4 @@ async def main(apply: bool, images_only: bool) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(asyncio.run(main("--apply" in sys.argv, "--images" in sys.argv)))
+    sys.exit(asyncio.run(main("--apply" in sys.argv, "--images" in sys.argv, "--pdf" in sys.argv)))

@@ -30,10 +30,14 @@ CREATE TABLE IF NOT EXISTS documents (
     -- jalankan reindex_documents.py (lihat README).
     embedding VECTOR(768),
     metadata JSONB,
+    -- Tingkat akses: umum (semua akun) | internal (user & admin) | rahasia (admin).
+    access_level VARCHAR(20) NOT NULL DEFAULT 'internal' CHECK (access_level IN ('umum', 'internal', 'rahasia')),
+    uploaded_by BIGINT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_documents_filename ON documents(filename);
+CREATE INDEX IF NOT EXISTS idx_documents_access_level ON documents(access_level);
 -- Index untuk similarity search.
 -- HNSW, bukan ivfflat: ivfflat membagi data ke sejumlah list dan secara default
 -- hanya memindai satu list per query, sehingga pada knowledge base kecil

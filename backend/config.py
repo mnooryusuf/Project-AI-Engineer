@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     # 1b) — masih muat di RAM 8GB bersama model embedding, tapi mepet. Harus
     # selaras dengan DOCUMENT_FOCUS_MAX_CHARS (tools/rag_tool.py) dan batas riwayat di agent.py.
     llm_num_ctx: int = 8192
+    # Berapa lama Ollama menahan model di RAM setelah dipakai. Bawaan Ollama
+    # 5 menit, sehingga pertanyaan pertama setelah jeda singkat kembali kena
+    # cold start (uji laporan v1: 47–118 dtk sampai token pertama).
+    ollama_keep_alive: str = "30m"
     # paraphrase-multilingual (768 dimensi, ~560MB). Menggantikan all-minilm
     # yang hanya dilatih bahasa Inggris: pada knowledge base berbahasa
     # Indonesia, all-minilm memberi skor pertanyaan DI LUAR topik (0.487-0.599)

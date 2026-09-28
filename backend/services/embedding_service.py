@@ -35,6 +35,7 @@ async def get_embedding(text: str) -> list[float]:
                 json={
                     "model": settings.ollama_embedding_model,
                     "prompt": payload_text,
+                    "keep_alive": settings.ollama_keep_alive,
                 },
             )
             if response.status_code != 500 or len(payload_text) <= _MIN_CHARS:

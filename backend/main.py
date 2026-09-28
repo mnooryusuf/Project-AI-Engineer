@@ -4,14 +4,16 @@ Nanang — Asisten AI Diskominfo SP TIK Kabupaten Hulu Sungai Selatan
 """
 import asyncio
 import json
+import logging
 import os
 import re
+import time
 import uuid
 import aiofiles
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
-from fastapi import BackgroundTasks, FastAPI, Depends, HTTPException, Request, UploadFile, File, status
+from fastapi import BackgroundTasks, FastAPI, Depends, Form, HTTPException, Request, UploadFile, File, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -24,17 +26,23 @@ from config import get_settings
 from database import get_db, engine, SessionLocal
 from models import Base, ChatHistory, Document, LoginAttempt, UploadJob, User
 from schemas import (
+    DocumentAccessUpdate,
     ChatRequest, UploadResponse, UploadJobStatus, HealthResponse,
     UserCreate, UserResponse, Token, TokenData,
     ChatHistoryItem, ChatSessionItem, DocumentListItem,
 )
-from agent import HISTORY_MAX_MESSAGES, IMAGE_EXTENSIONS, run_agent_stream
-from services.document_service import process_and_store_document, store_text_as_document, stored_files_for
-from services.llm_service import check_ollama_status
+from agent import (
+    FACT_NOT_IN_DOCUMENTS_ANSWER, FALLBACK_HEADER, HISTORY_MAX_MESSAGES, IDENTITY_ANSWER, IMAGE_EXTENSIONS,
+    NAME_NOT_IN_DOCUMENTS_ANSWER, NOT_IN_DOCUMENTS_ANSWER, UNVERIFIED_NOTE, run_agent_stream,
+)
+from services.document_service import extract_text_from_file, store_text_as_document, stored_files_for
+from services.embedding_service import get_embedding
+from services.llm_service import ask_llm, check_ollama_status
 from services.gemini_service import gemini_available
 from services.file_validation import verify_file_signature
 from tools.ocr_tool import extract_text_from_image
-from tools.rag_tool import find_mentioned_document
+from tools.rag_tool import document_visible, find_mentioned_document
+from access import ACCESS_LEVELS, DEFAULT_ACCESS_LEVEL, allowed_levels, classify_for_storage, levels_for_upload
 
 # ── Init ────────────────────────────────────────────────
 settings = get_settings()
@@ -56,6 +64,14 @@ with engine.begin() as conn:
             ADD COLUMN IF NOT EXISTS model VARCHAR(20)
     """))
     conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_accepted_at TIMESTAMPTZ"))
+    # Hak akses per dokumen (access.py). Dokumen lama otomatis "internal":
+    # tidak ada yang tiba-tiba terbuka untuk akun read_only.
+    conn.execute(text("""
+        ALTER TABLE documents
+            ADD COLUMN IF NOT EXISTS access_level VARCHAR(20) NOT NULL DEFAULT 'internal',
+            ADD COLUMN IF NOT EXISTS uploaded_by BIGINT
+    """))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_documents_access_level ON documents(access_level)"))
 
 # Pekerjaan yang masih "processing" saat proses ini mulai berarti backend mati
 # di tengah pemrosesan sebelumnya — BackgroundTasks hidup di dalam proses, jadi
@@ -121,9 +137,23 @@ async def _retention_loop() -> None:
         await asyncio.sleep(RETENTION_INTERVAL_SECONDS)
 
 
+async def _warm_up_models() -> None:
+    """Muat model embedding dan LLM ke RAM saat backend start, supaya
+    pertanyaan pertama pengguna tidak menanggung cold start. num_ctx harus
+    sama dengan panggilan sungguhan (llm_service memakainya), kalau tidak
+    Ollama memuat ulang model saat pertanyaan pertama datang."""
+    try:
+        await get_embedding("pemanasan model")
+        await ask_llm("Balas dengan satu kata: siap")
+        print("Pemanasan model selesai.")
+    except Exception as e:
+        print(f"Pemanasan model gagal (tidak fatal): {e}")
+
+
 @app.on_event("startup")
-async def _start_retention() -> None:
+async def _start_background_jobs() -> None:
     asyncio.create_task(_retention_loop())
+    asyncio.create_task(_warm_up_models())
 
 
 app.add_middleware(
@@ -357,6 +387,39 @@ def login(
 
 # ── Chat Endpoints ───────────────────────────────────────
 
+chat_logger = logging.getLogger("uvicorn.error")
+
+
+def _log_chat_metrics(tool_used, answer, sources_cleared, started, first_token_at, model) -> None:
+    """Satu baris log JSON per jawaban: tool, waktu sampai token pertama dan
+    total, serta jenis jawaban — supaya latensi per tool, jumlah penolakan,
+    dan tingkat jawaban "di luar dokumen" bisa dihitung dari log backend
+    (grep "chat_metrics"). Isi pertanyaan/jawaban sengaja tidak dicatat."""
+    if answer == NOT_IN_DOCUMENTS_ANSWER:
+        outcome = "refused_internal"
+    elif answer == IDENTITY_ANSWER:
+        outcome = "identity"
+    elif answer in (FACT_NOT_IN_DOCUMENTS_ANSWER, NAME_NOT_IN_DOCUMENTS_ANSWER):
+        outcome = "refused_unverified"
+    elif UNVERIFIED_NOTE.strip() in answer:
+        outcome = "answered_with_unverified_note"
+    elif FALLBACK_HEADER.strip() in answer:
+        outcome = "outside_documents"
+    elif sources_cleared:
+        outcome = "not_found_in_documents"
+    else:
+        outcome = "answered"
+    now = time.monotonic()
+    chat_logger.info("chat_metrics " + json.dumps({
+        "tool": tool_used,
+        "model": model,
+        "outcome": outcome,
+        "ttft_s": round(first_token_at - started, 2) if first_token_at else None,
+        "total_s": round(now - started, 2),
+        "answer_chars": len(answer),
+    }))
+
+
 @app.post("/chat", tags=["Chat"])
 async def chat(
     request: ChatRequest,
@@ -369,6 +432,8 @@ async def chat(
     Format tiap baris:
       {"type": "meta", "tool_used": "...", "sources": [...]}   <- sekali, di awal
       {"type": "token", "text": "..."}                          <- berkali-kali
+      {"type": "meta_update", "sources": []}                    <- opsional, setelah token terakhir:
+                                                                    jawaban "tidak ada di dokumen", sumber dikosongkan
       {"type": "done"}                                          <- sekali, di akhir
       {"type": "error", "detail": "..."}                        <- kalau gagal
 
@@ -388,6 +453,14 @@ async def chat(
     # tertutup -> DetachedInstanceError (terbukti muncul saat diuji; stream
     # terputus tanpa event "done" di baris terakhir).
     user_id = current_user.id
+    # Tingkat akses dokumen yang boleh dibaca penanya (access.py), ditangkap
+    # sekarang karena alasan yang sama dengan user_id di atas.
+    levels = allowed_levels(current_user.role)
+    # Kebijakan Gemini (docs/kebijakan-gemini.md): kutipan dokumen yang
+    # dikirim ke Google hanya boleh berasal dari dokumen umum. Dokumen
+    # internal/rahasia tidak pernah masuk prompt Gemini, apa pun role-nya.
+    if request.model == "gemini":
+        levels = [lvl for lvl in levels if lvl == "umum"]
 
     # Validasi pilihan model SEBELUM apa pun disimpan, supaya permintaan yang
     # ditolak tidak meninggalkan pesan user tanpa jawaban di riwayat.
@@ -418,7 +491,7 @@ async def chat(
     # lanjutan tetap membahasnya — lihat tools/rag_tool.find_mentioned_document.
     mentioned_document = None
     if not request.document_filename:
-        mentioned_document = find_mentioned_document(request.message, db)
+        mentioned_document = find_mentioned_document(request.message, db, levels)
 
     # Dokumen yang terakhir dilampirkan di sesi ini — dipakai sebagai fokus
     # pertanyaan lanjutan yang tidak membawa lampiran baru. Kedaluwarsa begitu
@@ -452,7 +525,7 @@ async def chat(
                 .all()
             )
             topic_changed = any(a.follow_up is False for a in later_answers[1:])
-            if not topic_changed and db.query(Document.id).filter(Document.filename == last_doc.document_ref).first():
+            if not topic_changed and document_visible(db, last_doc.document_ref, levels):
                 active_document = last_doc.document_ref
 
     # Simpan pesan user — ini masih aman pakai `db` dari Depends(get_db)
@@ -481,7 +554,9 @@ async def chat(
     # pernah dipakai untuk buka file di disk.
     document_filename = None
     if request.document_filename:
-        exists = db.query(Document.id).filter(Document.filename == request.document_filename).first()
+        # Dokumen yang tidak boleh dibaca dijawab 404, sama seperti yang tidak
+        # ada — supaya keberadaan dokumen rahasia pun tidak terbocorkan.
+        exists = document_visible(db, request.document_filename, levels)
         if not exists:
             raise HTTPException(status_code=404, detail="Dokumen tidak ditemukan di knowledge base.")
         document_filename = request.document_filename
@@ -494,18 +569,26 @@ async def chat(
         meta_tool_used = None
         meta_sources = None
         meta_follow_up = None
+        started = time.monotonic()
+        first_token_at = None
+        sources_cleared = False
         try:
             async for event in run_agent_stream(
                 question=request.message, db=stream_db,
                 document_filename=document_filename,
                 history=history, active_document=active_document, user_id=user_id,
-                model=request.model,
+                model=request.model, levels=levels,
             ):
                 if event["type"] == "meta":
                     meta_tool_used = event.get("tool_used")
                     meta_sources = event.get("sources")
                     meta_follow_up = event.get("follow_up")
+                elif event["type"] == "meta_update":
+                    meta_sources = event.get("sources")
+                    sources_cleared = True
                 elif event["type"] == "token":
+                    if first_token_at is None:
+                        first_token_at = time.monotonic()
                     full_answer += event["text"]
                 yield json.dumps(event) + "\n"
         except Exception as e:
@@ -530,6 +613,7 @@ async def chat(
                 ))
                 stream_db.commit()
             stream_db.close()
+            _log_chat_metrics(meta_tool_used, full_answer, sources_cleared, started, first_token_at, request.model)
             yield json.dumps({"type": "done"}) + "\n"
 
     return StreamingResponse(event_stream(), media_type="application/x-ndjson")
@@ -629,7 +713,8 @@ def delete_chat_session(
 _upload_semaphore = asyncio.Semaphore(1)
 
 
-async def _process_upload_job(job_id: str, file_path: str, original_filename: str, ext: str) -> None:
+async def _process_upload_job(job_id: str, file_path: str, original_filename: str, ext: str,
+                              access_level: str, uploaded_by: int) -> None:
     """
     Kerjakan ekstraksi + embedding satu unggahan di latar belakang.
 
@@ -652,24 +737,36 @@ async def _process_upload_job(job_id: str, file_path: str, original_filename: st
                 Document.filename == original_filename
             ).scalar()
 
+            # Teks diambil dulu, baru diklasifikasi, baru disimpan: dokumen
+            # yang diminta "umum" tapi memuat data pribadi dinaikkan ke
+            # "internal" sebelum masuk knowledge base (access.classify_for_storage).
             if ext in DOCUMENT_EXTENSIONS:
-                chunks = await process_and_store_document(file_path, original_filename, db)
+                teks = await extract_text_from_file(file_path)
+                metadata = None
                 gagal_pesan = (
                     f"Tidak ada teks yang bisa dibaca dari {original_filename}. "
                     "Dokumen TIDAK masuk knowledge base."
                 )
-                sukses_pesan = f"Dokumen diproses: {chunks} chunk disimpan ke knowledge base."
+                sukses_awal = "Dokumen diproses"
             else:
                 hasil = await extract_text_from_image(file_path)
                 teks = hasil["text"] if hasil.get("success") else ""
-                chunks = await store_text_as_document(
-                    teks, original_filename, db, {"source": "ocr"}
-                ) if teks.strip() else 0
+                metadata = {"source": "ocr"}
                 gagal_pesan = (
                     f"Tidak ada teks yang terbaca pada {original_filename}. "
                     "Gambar TIDAK masuk knowledge base — pastikan tulisannya jelas dan tidak terpotong."
                 )
-                sukses_pesan = f"Gambar dibaca lewat OCR: {chunks} chunk disimpan ke knowledge base."
+                sukses_awal = "Gambar dibaca lewat OCR"
+            final_level, pribadi = classify_for_storage(access_level, teks)
+            chunks = await store_text_as_document(
+                teks, original_filename, db, metadata, access_level=final_level, uploaded_by=uploaded_by,
+            ) if teks.strip() else 0
+            sukses_pesan = f"{sukses_awal}: {chunks} chunk disimpan ke knowledge base (akses: {final_level})."
+            if pribadi:
+                sukses_pesan += (
+                    f" Tingkat akses dinaikkan dari umum ke internal karena dokumen memuat "
+                    f"{', '.join(pribadi)}."
+                )
 
             # Nol chunk TIDAK boleh dilaporkan sebagai sukses — pengguna akan
             # mengira dokumennya masuk knowledge base padahal kosong, lalu
@@ -725,6 +822,10 @@ def _finish_job(db: Session, job_id: str, status: str, message: str,
 async def upload_file(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
+    # Tingkat akses dokumen (access.py). Kosong: "internal" untuk dokumen
+    # baru, atau tetap seperti versi lama bila berkas bernama sama diunggah
+    # ulang — supaya pembaruan dokumen umum tidak diam-diam jadi internal.
+    access_level: str | None = Form(None),
     # read_only sengaja tidak termasuk: menambah dokumen mengubah knowledge
     # base bersama, bukan operasi "baca saja".
     current_user: User = Depends(require_roles("admin", "user")),
@@ -742,6 +843,16 @@ async def upload_file(
     original_filename = Path(file.filename).name
     if not original_filename:
         raise HTTPException(status_code=400, detail="Nama file tidak valid.")
+
+    if access_level is None:
+        existing = db.query(Document.access_level).filter(Document.filename == original_filename).first()
+        access_level = existing.access_level if existing else DEFAULT_ACCESS_LEVEL
+    elif access_level not in levels_for_upload(current_user.role):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Role '{current_user.role}' hanya boleh mengunggah dengan tingkat akses: "
+                   f"{', '.join(levels_for_upload(current_user.role))}.",
+        )
 
     ext = Path(original_filename).suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
@@ -784,7 +895,9 @@ async def upload_file(
     ))
     db.commit()
 
-    background_tasks.add_task(_process_upload_job, job_id, file_path, original_filename, ext)
+    background_tasks.add_task(
+        _process_upload_job, job_id, file_path, original_filename, ext, access_level, current_user.id
+    )
 
     return UploadResponse(
         job_id=job_id,
@@ -832,22 +945,44 @@ def list_documents(
     Daftar dokumen di knowledge base — dikelompokkan per filename (satu
     dokumen tersimpan sebagai banyak baris/chunk di tabel documents).
 
-    Knowledge base bersifat SHARED, bukan per-user — sama seperti RAG_SEARCH
-    yang mencari ke semua dokumen tanpa memandang siapa yang mengunggahnya,
-    daftar ini juga menampilkan semua dokumen untuk siapa pun yang login.
+    Hanya dokumen yang tingkat aksesnya boleh dibaca role pengguna ini
+    (access.py) — akun read_only hanya melihat dokumen umum.
     """
     result = db.execute(
         text("""
-            SELECT filename, count(*) AS chunk_count, min(created_at) AS uploaded_at
+            SELECT filename, count(*) AS chunk_count, min(created_at) AS uploaded_at,
+                   max(access_level) AS access_level
             FROM documents
+            WHERE access_level = ANY(:levels)
             GROUP BY filename
             ORDER BY uploaded_at DESC
-        """)
+        """),
+        {"levels": allowed_levels(current_user.role)},
     )
     return [
-        {"filename": row.filename, "chunk_count": row.chunk_count, "uploaded_at": row.uploaded_at}
+        {"filename": row.filename, "chunk_count": row.chunk_count, "uploaded_at": row.uploaded_at,
+         "access_level": row.access_level}
         for row in result.fetchall()
     ]
+
+
+@app.patch("/documents/{filename}", tags=["Documents"])
+def update_document_access(
+    filename: str,
+    update: DocumentAccessUpdate,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    """Ubah tingkat akses satu dokumen (semua chunk-nya). Hanya admin."""
+    if update.access_level not in ACCESS_LEVELS:
+        raise HTTPException(status_code=400, detail=f"Tingkat akses harus salah satu dari: {', '.join(ACCESS_LEVELS)}.")
+    updated = db.query(Document).filter(Document.filename == filename).update(
+        {Document.access_level: update.access_level}, synchronize_session=False
+    )
+    db.commit()
+    if updated == 0:
+        raise HTTPException(status_code=404, detail="Dokumen tidak ditemukan di knowledge base.")
+    return {"filename": filename, "access_level": update.access_level, "chunks_updated": updated}
 
 
 @app.delete("/documents/{filename}", tags=["Documents"])

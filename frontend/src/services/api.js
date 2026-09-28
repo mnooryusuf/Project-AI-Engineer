@@ -69,7 +69,7 @@ export const getMe = async () => {
 //   onDone()        -> sekali, setelah stream selesai normal
 // Melempar Error kalau request gagal total (network/HTTP non-2xx).
 export const sendMessageStream = async (sessionId, message, documentFilename, callbacks = {}, signal, model = 'local') => {
-  const { onMeta, onToken, onDone } = callbacks
+  const { onMeta, onMetaUpdate, onToken, onDone } = callbacks
   const token = localStorage.getItem('access_token')
 
   const response = await fetch('/api/chat', {
@@ -118,6 +118,7 @@ export const sendMessageStream = async (sessionId, message, documentFilename, ca
       if (!line.trim()) continue
       const event = JSON.parse(line)
       if (event.type === 'meta') onMeta?.(event)
+      else if (event.type === 'meta_update') onMetaUpdate?.(event)
       else if (event.type === 'token') onToken?.(event.text)
       else if (event.type === 'error') throw new Error(event.detail || 'Terjadi kesalahan di server.')
       // "done" tidak perlu ditangani di sini — loop berakhir wajar saat
@@ -154,9 +155,11 @@ export const deleteChatSession = async (sessionId) => {
 // CEPAT — server hanya memvalidasi dan menyimpan berkasnya. Ekstraksi teks,
 // OCR, dan embedding berjalan di latar belakang; pantau dengan
 // getUploadJob(job_id) sampai statusnya bukan "processing" lagi.
-export const uploadFile = async (file) => {
+// accessLevel: 'umum' | 'internal' | 'rahasia' (lihat backend/access.py).
+export const uploadFile = async (file, accessLevel) => {
   const form = new FormData()
   form.append('file', file)
+  if (accessLevel) form.append('access_level', accessLevel)
   const res = await api.post('/upload', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
@@ -189,6 +192,12 @@ export const waitForUploadJob = async (jobId, { signal } = {}) => {
 // ── Documents (Knowledge Base) ─────────────────────────
 export const getDocuments = async () => {
   const res = await api.get('/documents')
+  return res.data
+}
+
+// Ubah tingkat akses dokumen: 'umum' | 'internal' | 'rahasia' (khusus admin).
+export const updateDocumentAccess = async (filename, accessLevel) => {
+  const res = await api.patch(`/documents/${encodeURIComponent(filename)}`, { access_level: accessLevel })
   return res.data
 }
 

@@ -8,6 +8,7 @@ import aiofiles
 from pathlib import Path
 from typing import List
 from sqlalchemy.orm import Session
+from access import DEFAULT_ACCESS_LEVEL
 from models import Document
 from services.embedding_service import get_embedding
 from config import get_settings
@@ -100,6 +101,31 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
     return chunks
 
 
+def _pdf_text_layer(file_path: str, reader) -> list[str]:
+    """Lapisan teks tiap halaman PDF.
+
+    pypdfium2 (mesin teks PDFium/Chrome) dipakai lebih dulu, pypdf hanya
+    cadangan. pypdf menyisipkan spasi dan baris baru di tengah kata pada PDF
+    hasil ekspor Word: "HENDRO MARTONO, MT" di surat permohonan PBJ terbaca
+    "HENDRO\\n \\nMAR TONO,", sehingga model menjawab ejaan "Mar Tono" (uji
+    laporan akhir). pypdfium2 membaca baris yang sama utuh.
+    """
+    try:
+        import pypdfium2 as pdfium
+        doc = pdfium.PdfDocument(file_path)
+        try:
+            pages = []
+            for i in range(len(doc)):
+                textpage = doc[i].get_textpage()
+                pages.append(textpage.get_text_range().replace("\r\n", "\n").replace("\r", "\n"))
+                textpage.close()
+            return pages
+        finally:
+            doc.close()
+    except Exception:
+        return [(page.extract_text() or "") for page in reader.pages]
+
+
 async def extract_text_from_file(file_path: str) -> str:
     """Ekstrak teks dari file PDF, TXT, DOCX, atau XLSX."""
     ext = Path(file_path).suffix.lower()
@@ -111,7 +137,7 @@ async def extract_text_from_file(file_path: str) -> str:
     elif ext == ".pdf":
         from pypdf import PdfReader
         reader = PdfReader(file_path)
-        halaman = [(page.extract_text() or "") for page in reader.pages]
+        halaman = _pdf_text_layer(file_path, reader)
 
         # PDF hasil pindaian isinya gambar, bukan teks — pypdf mengembalikan
         # string kosong tanpa error apa pun, sehingga dokumen diam-diam masuk
@@ -235,6 +261,8 @@ async def store_text_as_document(
     filename: str,
     db: Session,
     extra_metadata: dict | None = None,
+    access_level: str = DEFAULT_ACCESS_LEVEL,
+    uploaded_by: int | None = None,
 ) -> int:
     """
     Chunk + embedding + simpan teks ke knowledge base.
@@ -259,6 +287,8 @@ async def store_text_as_document(
             content=chunk,
             embedding=embedding,
             doc_metadata={"chunk_index": i, "total_chunks": len(chunks), **(extra_metadata or {})},
+            access_level=access_level,
+            uploaded_by=uploaded_by,
         )
         db.add(doc)
         saved += 1
@@ -270,11 +300,13 @@ async def store_text_as_document(
 async def process_and_store_document(
     file_path: str,
     filename: str,
-    db: Session
+    db: Session,
+    access_level: str = DEFAULT_ACCESS_LEVEL,
+    uploaded_by: int | None = None,
 ) -> int:
     """
     Pipeline lengkap: ekstrak teks dari file -> chunk -> embedding -> simpan.
     Mengembalikan jumlah chunk yang disimpan.
     """
     text = await extract_text_from_file(file_path)
-    return await store_text_as_document(text, filename, db)
+    return await store_text_as_document(text, filename, db, access_level=access_level, uploaded_by=uploaded_by)

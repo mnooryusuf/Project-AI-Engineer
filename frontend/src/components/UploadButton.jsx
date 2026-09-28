@@ -1,6 +1,7 @@
 // src/components/UploadButton.jsx
 import { useRef, useState } from 'react'
-import { Paperclip } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { Paperclip, ShieldCheck } from 'lucide-react'
 import { uploadFile } from '../services/api'
 
 const ALLOWED = [
@@ -17,38 +18,39 @@ const ALLOWED_EXT = '.pdf, .txt, .docx, .xlsx, .png, .jpg, .jpeg, .webp'
 // (ekstensi + magic bytes) jadi ini tidak melonggarkan keamanan.
 const ALLOWED_EXT_LIST = ALLOWED_EXT.split(',').map((e) => e.trim())
 
-// Pengingat data pribadi (UU PDP) sebelum unggahan pertama di browser ini —
-// dokumen masuk knowledge base bersama yang bisa dicari semua pengguna.
-const UPLOAD_NOTICE_KEY = 'upload_privacy_notice_seen'
-const UPLOAD_NOTICE =
-  'Dokumen yang diunggah masuk knowledge base bersama dan bisa dicari semua pengguna.\n\n' +
-  'Jangan unggah data pribadi yang tidak perlu (KTP, NIK, nomor rekening, data kesehatan). ' +
-  'Lanjutkan mengunggah?'
-
-function confirmUploadNotice() {
-  try {
-    if (localStorage.getItem(UPLOAD_NOTICE_KEY)) return true
-  } catch {
-    // localStorage tidak tersedia — tetap tampilkan pengingat
-  }
-  const ok = window.confirm(UPLOAD_NOTICE)
-  if (ok) {
-    try { localStorage.setItem(UPLOAD_NOTICE_KEY, '1') } catch { /* abaikan */ }
-  }
-  return ok
-}
+// Tingkat akses yang bisa dipilih per role — sama dengan backend/access.py
+// (backend tetap yang menegakkan; ini hanya supaya pilihan yang ditolak
+// tidak ditawarkan).
+const ACCESS_OPTIONS = [
+  { value: 'umum', label: 'Umum', desc: 'Bisa dicari semua akun. Hanya untuk dokumen tanpa data pribadi (SOP, katalog layanan, FAQ).' },
+  { value: 'internal', label: 'Internal', desc: 'Hanya pegawai yang disetujui admin. Untuk surat, SPT, berita acara.' },
+  { value: 'rahasia', label: 'Rahasia', desc: 'Hanya admin.' },
+]
+const ROLE_ACCESS = { read_only: ['umum'], user: ['umum', 'internal'], admin: ['umum', 'internal', 'rahasia'] }
 
 // `processing` datang dari ChatBox, yang memantau pekerjaan sampai selesai —
 // pemantauan tidak ditaruh di sini karena harus tetap berjalan (dan bisa
 // dilanjutkan setelah halaman dimuat ulang) terlepas dari tombol ini.
-export default function UploadButton({ onJobStarted, onError, processing }) {
+export default function UploadButton({ onJobStarted, onError, processing, role }) {
   const inputRef = useRef(null)
   const [uploading, setUploading] = useState(false)
   // Spinner tetap berputar selama server masih memproses, walau transfer
   // berkasnya sendiri sudah selesai sejak tadi.
   const busy = uploading || processing
 
-  const handleFile = async (file) => {
+  // Berkas yang sudah lolos validasi, menunggu pengunggah memilih tingkat
+  // akses di dialog. Setiap unggahan wajib diklasifikasi — dulu semua
+  // unggahan lewat UI otomatis "internal" tanpa ditanya.
+  const [pendingFile, setPendingFile] = useState(null)
+  const [accessLevel, setAccessLevel] = useState('internal')
+  const choices = ACCESS_OPTIONS.filter((o) => (ROLE_ACCESS[role] ?? ['umum', 'internal']).includes(o.value))
+
+  const cancelPending = () => {
+    setPendingFile(null)
+    if (inputRef.current) inputRef.current.value = ''
+  }
+
+  const handleFile = (file) => {
     if (!file) return
     const ext = '.' + (file.name.split('.').pop() || '').toLowerCase()
     if (!ALLOWED.includes(file.type) && !ALLOWED_EXT_LIST.includes(ext)) {
@@ -59,10 +61,13 @@ export default function UploadButton({ onJobStarted, onError, processing }) {
       onError?.('Ukuran file melebihi 10MB.')
       return
     }
-    if (!confirmUploadNotice()) {
-      if (inputRef.current) inputRef.current.value = ''
-      return
-    }
+    setAccessLevel(choices.some((c) => c.value === 'internal') ? 'internal' : choices[0]?.value ?? 'internal')
+    setPendingFile(file)
+  }
+
+  const startUpload = async () => {
+    const file = pendingFile
+    setPendingFile(null)
 
     // Preview dibuat dari File object di browser (blob URL) — tidak perlu
     // menunggu upload selesai atau memanggil endpoint tambahan di backend.
@@ -73,7 +78,7 @@ export default function UploadButton({ onJobStarted, onError, processing }) {
     try {
       // Transfer berkas selesai cepat; ekstraksi/OCR/embedding berjalan di
       // server. job_id diserahkan ke ChatBox yang memantaunya sampai selesai.
-      const { job_id } = await uploadFile(file)
+      const { job_id } = await uploadFile(file, accessLevel)
       onJobStarted?.({ jobId: job_id, filename: file.name, previewUrl, fileSize: file.size })
     } catch (err) {
       if (previewUrl) URL.revokeObjectURL(previewUrl)
@@ -92,6 +97,79 @@ export default function UploadButton({ onJobStarted, onError, processing }) {
 
   return (
     <>
+      {/* Portal ke body: composer punya transform (animasi), yang membuat
+          position:fixed di dalamnya relatif ke composer — dialog sempat
+          terpotong di bawah layar dan tombol Unggah tidak terlihat (uji DOM). */}
+      {pendingFile && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0" style={{ background: 'var(--scrim)' }} onClick={cancelPending} />
+          <div
+            role="dialog"
+            aria-labelledby="upload-dialog-title"
+            className="relative w-full max-w-md rounded-3xl glass slide-up-fade p-6 flex flex-col gap-4"
+            style={{ background: 'var(--bg-secondary)' }}
+          >
+            <h2 id="upload-dialog-title" className="font-bold text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+              <ShieldCheck size={20} className="opacity-80" /> Siapa yang boleh mencari dokumen ini?
+            </h2>
+            <p className="text-sm truncate" style={{ color: 'var(--text-muted)' }} title={pendingFile.name}>
+              {pendingFile.name}
+            </p>
+            <div className="flex flex-col gap-2">
+              {choices.map((o) => (
+                <label
+                  key={o.value}
+                  htmlFor={`access-${o.value}`}
+                  className="flex items-start gap-3 px-3 py-2.5 rounded-xl cursor-pointer"
+                  style={{
+                    background: accessLevel === o.value ? 'var(--overlay-2)' : 'var(--overlay-1)',
+                    border: `1px solid ${accessLevel === o.value ? 'var(--accent-blue)' : 'var(--glass-border)'}`,
+                  }}
+                >
+                  <input
+                    id={`access-${o.value}`}
+                    type="radio"
+                    name="access-level"
+                    value={o.value}
+                    checked={accessLevel === o.value}
+                    onChange={() => setAccessLevel(o.value)}
+                    className="mt-1"
+                  />
+                  <span>
+                    <span className="text-sm font-semibold block" style={{ color: 'var(--text-primary)' }}>{o.label}</span>
+                    <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{o.desc}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              Jangan unggah data pribadi yang tidak perlu (KTP, NIK, nomor rekening, data kesehatan). Dokumen
+              "Umum" yang ternyata memuat NIK, NIP, nama bergelar, email, atau nomor HP otomatis disimpan sebagai
+              "Internal".
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={cancelPending}
+                className="text-sm font-semibold px-4 py-2 rounded-xl hover:bg-[var(--overlay-2)]"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                Batal
+              </button>
+              <button
+                id="upload-confirm-btn"
+                type="button"
+                onClick={startUpload}
+                className="text-sm font-bold px-4 py-2 rounded-xl text-white"
+                style={{ background: 'linear-gradient(135deg, var(--accent-blue), var(--accent-purple))' }}
+              >
+                Unggah
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
       <input
         ref={inputRef}
         type="file"

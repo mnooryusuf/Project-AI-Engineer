@@ -332,6 +332,7 @@ export default function App() {
           onLogout={handleLogout}
           onToggleSidebar={() => setSidebarOpen((v) => !v)}
           attachRequest={attachRequest}
+          role={role}
         />
       </div>
       <DocumentsPanel

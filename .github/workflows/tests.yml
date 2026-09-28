@@ -1,0 +1,26 @@
+# Unit test backend (backend/tests) di setiap push dan pull request.
+# Test ini tidak butuh Ollama maupun database — lihat backend/tests/conftest.py.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"   # wajib 3.12, lihat README
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      # Wheel torch versi CPU (dependensi easyocr) — versi default Linux
+      # ikut membawa CUDA berukuran beberapa GB yang tidak dipakai.
+      - run: pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements-dev.txt
+      - run: python -m pytest -q

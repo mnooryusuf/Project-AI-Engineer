@@ -45,3 +45,39 @@ def test_stored_files_for_matches_only_that_document(tmp_path, monkeypatch):
         f.write_bytes(b"x")
     os.utime(old, (time.time() - 100, time.time() - 100))
     assert document_service.stored_files_for("surat.pdf") == [old, new]
+
+
+
+def _blank_pdf(path):
+    pdfium = pytest.importorskip("pypdfium2")
+    pdf = pdfium.PdfDocument.new()
+    pdf.new_page(300, 200)
+    pdf.new_page(300, 200)
+    pdf.save(str(path))
+    pdf.close()
+
+
+def test_pdf_text_layer_reads_every_page(tmp_path):
+    from pypdf import PdfReader
+    path = tmp_path / "dua-halaman.pdf"
+    _blank_pdf(path)
+    assert document_service._pdf_text_layer(str(path), PdfReader(str(path))) == ["", ""]
+
+
+def test_pdf_text_layer_falls_back_to_pypdf(tmp_path, monkeypatch):
+    """Kalau pypdfium2 gagal membuka file, lapisan teks tetap diambil lewat pypdf."""
+    import pypdfium2
+    from pypdf import PdfReader
+    path = tmp_path / "cadangan.pdf"
+    _blank_pdf(path)
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("pdfium rusak")
+    monkeypatch.setattr(pypdfium2, "PdfDocument", broken)
+
+    class FakePage:
+        def extract_text(self):
+            return "teks dari pypdf"
+    class FakeReader:
+        pages = [FakePage()]
+    assert document_service._pdf_text_layer(str(path), FakeReader()) == ["teks dari pypdf"]
